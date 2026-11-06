@@ -45,6 +45,14 @@ export class BoardSession {
     for (const fn of this.listeners) fn(kind, id);
   }
 
+  /** Forget everything (the server restarted); the next resync fetches a full snapshot. */
+  reset() {
+    this.state = emptyBoard();
+    this.pending = [];
+    this.synced = false;
+    this.notify('reset');
+  }
+
   /** Call after (re)connecting: asks for what this client has missed. */
   resync() {
     this.synced = false;

@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { FirebaseApp } from 'firebase/app';
 import type { Auth, User as FbUser } from 'firebase/auth';
+import { apiPath } from './env.ts';
 
 /**
  * Sign-in for NET360 Classroom.
@@ -61,7 +62,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     (async () => {
       let cfg = { authMode: 'dev' as 'firebase' | 'dev', media: false };
       try {
-        cfg = await (await fetch('/api/config')).json();
+        cfg = await (await fetch(apiPath('/api/config'))).json();
       } catch {
         /* server unreachable — UI shows errors later */
       }

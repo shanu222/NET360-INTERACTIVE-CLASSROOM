@@ -56,6 +56,23 @@ class Store {
     return s;
   }
 
+  /** Re-create a session restored from the database after a restart. */
+  adopt(saved: Pick<Session, 'info' | 'teacherUid' | 'boardKey'>, board?: BoardState): Session {
+    const s: Session = {
+      ...saved,
+      board: board ?? emptyBoard(),
+      // The event log is not persisted: reconnecting clients get a snapshot (epoch changed).
+      log: [],
+      roster: new Map(),
+      cls: { showJoin: !board || board.order.length === 0, present: 0, live: true },
+      ended: false,
+      lastActive: Date.now(),
+    };
+    this.byId.set(s.info.id, s);
+    this.byCode.set(s.info.code, s.info.id);
+    return s;
+  }
+
   get(id: string) {
     return this.byId.get(id);
   }

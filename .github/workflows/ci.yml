@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build
+      - name: Sync test — 40 students, dropouts, a late joiner
+        run: |
+          npm start > server.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf http://localhost:4000/api/health && break; sleep 1; done
+          npm run loadtest
+      - name: Server log
+        if: failure()
+        run: cat server.log
+      - name: Restart test — a class survives a mid-lesson redeploy (local D1 stand-in)
+        run: npm run test:restart
+
+  server-image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the Railway image
+        run: docker build -f apps/server/Dockerfile -t net360-server .
+      - name: Smoke test the image
+        run: |
+          docker run -d -p 4000:4000 -e PORT=4000 --name srv net360-server
+          for i in $(seq 1 30); do curl -sf http://localhost:4000/api/health && exit 0; sleep 1; done
+          docker logs srv; exit 1

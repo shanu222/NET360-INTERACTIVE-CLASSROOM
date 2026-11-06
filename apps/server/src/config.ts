@@ -31,7 +31,46 @@ export const config = {
 
   /** Sessions with no activity for this long are removed from memory. */
   sessionIdleMs: Number(env.SESSION_IDLE_HOURS ?? 12) * 3600_000,
+
+  /**
+   * Web origins allowed to call this server, comma-separated.
+   * e.g. ALLOWED_ORIGINS=https://classroom.net360.pk,https://net360-classroom.vercel.app
+   * A leading "*." matches subdomains (e.g. *.vercel.app for preview deployments).
+   * Empty = allow any origin (fine for local development only).
+   */
+  allowedOrigins: (env.ALLOWED_ORIGINS ?? '')
+    .split(',')
+    .map((s) => s.trim().replace(/\/+$/, ''))
+    .filter(Boolean),
+
+  /** Cloudflare D1 — sessions, attendance, hands and board snapshots. Optional. */
+  d1: {
+    accountId: env.CLOUDFLARE_ACCOUNT_ID ?? '',
+    databaseId: env.CLOUDFLARE_D1_DATABASE_ID ?? '',
+    apiToken: env.CLOUDFLARE_API_TOKEN ?? '',
+    /** Only for tests against a local stand-in of the D1 API. */
+    apiBase: (env.CLOUDFLARE_API_BASE ?? 'https://api.cloudflare.com').replace(/\/+$/, ''),
+  },
+  /** How often changed boards are snapshotted to the database. */
+  snapshotEveryMs: Number(env.SNAPSHOT_EVERY_SECONDS ?? 3) * 1000,
 };
+
+/** Random per server start; clients that see it change take a fresh snapshot. */
+export const epoch = Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+
+export const dbEnabled = Boolean(config.d1.accountId && config.d1.databaseId && config.d1.apiToken);
+
+export function originAllowed(origin: string | undefined): boolean {
+  if (!origin) return true; // same-origin requests, curl, health checks
+  if (!config.allowedOrigins.length) return true;
+  let host = '';
+  try {
+    host = new URL(origin).hostname;
+  } catch {
+    return false;
+  }
+  return config.allowedOrigins.some((p) => (p.startsWith('*.') ? host.endsWith(p.slice(1)) : p === origin));
+}
 
 export const authMode: 'firebase' | 'dev' = config.firebase.projectId ? 'firebase' : 'dev';
 export const mediaEnabled = Boolean(config.livekit.url && config.livekit.apiKey && config.livekit.apiSecret);

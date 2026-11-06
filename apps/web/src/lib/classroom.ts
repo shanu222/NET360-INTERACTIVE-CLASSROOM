@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { io, type Socket } from 'socket.io-client';
+import { io, type ManagerOptions, type Socket, type SocketOptions } from 'socket.io-client';
 import msgpackParser from 'socket.io-msgpack-parser';
 import { BoardSession } from '@net360/board-engine';
 import type { ClassState, ClientToServer, RosterEntry, ServerToClient, Welcome } from '@net360/protocol';
 import { useAuth } from './auth.tsx';
+import { API_URL } from './env.ts';
 
 export type Status = 'connecting' | 'live' | 'reconnecting' | 'ended' | 'error';
 
@@ -40,7 +41,7 @@ export function useClassroom(sessionId: string | undefined, opts: { boardKey?: s
 
   useEffect(() => {
     if (!sessionId || !enabled) return;
-    const s: Socket<ServerToClient, ClientToServer> = io({
+    const opts2: Partial<ManagerOptions & SocketOptions> = {
       parser: msgpackParser,
       transports: ['websocket', 'polling'],
       reconnectionDelay: 400,
@@ -52,7 +53,10 @@ export function useClassroom(sessionId: string | undefined, opts: { boardKey?: s
           .then((a) => cb({ sessionId, clientId, boardKey: opts.boardKey, ...a }))
           .catch(() => cb({ sessionId, clientId, boardKey: opts.boardKey }));
       },
-    });
+    };
+    // Same origin in local dev; the Railway server's URL when split-hosted.
+    const s: Socket<ServerToClient, ClientToServer> = API_URL ? io(API_URL, opts2) : io(opts2);
+    let epoch: string | null = null;
     board.setTransport(
       (ev) => s.emit('b', ev),
       (seq) => s.emit('sync', seq),
@@ -61,7 +65,6 @@ export function useClassroom(sessionId: string | undefined, opts: { boardKey?: s
     s.on('connect', () => {
       setStatus('live');
       setError(null);
-      board.resync();
     });
     s.on('disconnect', (reason) => {
       if (reason !== 'io client disconnect') setStatus('reconnecting');
@@ -74,6 +77,11 @@ export function useClassroom(sessionId: string | undefined, opts: { boardKey?: s
       } else setStatus((st) => (st === 'live' ? 'reconnecting' : st));
     });
     s.on('welcome', (w) => {
+      // A different epoch means the server restarted and restored the class from
+      // its last saved snapshot: drop local state and take the server's board whole.
+      if (epoch && epoch !== w.epoch) board.reset();
+      epoch = w.epoch;
+      board.resync();
       setWelcome(w);
       setCls(w.cls);
     });

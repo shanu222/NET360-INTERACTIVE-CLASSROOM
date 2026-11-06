@@ -60,12 +60,17 @@ Both use the same code; only three settings change (see `.env.example`). The ser
 ```text
 apps/
   web/            React + Vite: /, /join, /class/:id (student), /teach/:id (teacher), /board/:id (display)
-  server/         Express + Socket.IO realtime server, Firebase token check, LiveKit tokens
+  server/         Express + Socket.IO realtime server, Firebase token check, LiveKit tokens,
+                  Cloudflare D1 persistence (db/schema.sql), Dockerfile for Railway
 packages/
   protocol/       Event types, compact stroke encoding, the shared board reducer
   board-engine/   Board sync, two-layer canvas renderer, pen input, notes export
 scripts/
   loadtest.ts     40-student sync and latency test
+  restart-test.ts a class survives the server restarting mid-lesson
+  d1-local.mjs    local stand-in for the Cloudflare D1 API (testing)
+vercel.json       web app on Vercel
+railway.json      realtime server on Railway
 ```
 
 ### How sync works
@@ -74,7 +79,11 @@ Every board change is a small event (`stroke start`, `points`, `end`, `hide`, `s
 
 ## Deploy
 
-One Node process serves everything: `npm run build && npm start` behind HTTPS (Render, Railway, Fly.io or any VPS with Nginx/Caddy). WebSockets must be allowed by the proxy. Sessions live in memory for the MVP — a restart ends live classes.
+**Web app on Vercel, realtime server on Railway, database on Cloudflare D1** — step-by-step in [DEPLOY.md](DEPLOY.md).
+
+Live classes run in the Railway process; every few seconds (and on shutdown) changed boards are saved to D1 with sessions, attendance and raised hands. After a redeploy the server restores live classes and every screen reloads the board automatically.
+
+Alternatively, one Node process can serve everything: `npm run build && npm start` behind HTTPS.
 
 ## Next phases
 
@@ -82,4 +91,4 @@ One Node process serves everything: `npm run build && npm start` behind HTTPS (R
 4. Teacher and student video (LiveKit)
 5. Student Solve mode — invited student writes on the board, teacher annotates
 6. Live questions — MCQ with countdown, private answers, reveal
-7. Groups, recording, analytics; Firestore persistence for sessions and notes
+7. Groups, recording, participation analytics from the D1 data; notes archive per student

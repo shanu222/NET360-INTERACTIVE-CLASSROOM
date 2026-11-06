@@ -15,12 +15,30 @@ import type {
   SocketAuth,
   Tool,
 } from '@net360/protocol';
-import { authMode, config, mediaEnabled } from './config.ts';
+import { authMode, config, dbEnabled, epoch, mediaEnabled, originAllowed } from './config.ts';
 import { mayTeach, userFromRequest, verifyUser } from './auth.ts';
 import { store, type Session } from './store.ts';
 import { mediaToken } from './media.ts';
+import { migrate } from './db.ts';
+import { flushAll, persist, restoreLiveSessions, startSnapshots } from './persist.ts';
 
 const app = express();
+app.set('trust proxy', true); // behind Railway's proxy
+app.disable('x-powered-by');
+
+// CORS: the web app (Vercel) calls this server (Railway) from another origin.
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin && originAllowed(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Vary', 'Origin');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Dev-User');
+    res.setHeader('Access-Control-Max-Age', '86400');
+  }
+  if (req.method === 'OPTIONS') return res.sendStatus(origin && originAllowed(origin) ? 204 : 403);
+  next();
+});
 app.use(express.json({ limit: '64kb' }));
 
 /* ------------------------------------------------------------------ */
@@ -31,7 +49,7 @@ app.get('/api/config', (_req, res) => {
   res.json({ authMode, media: mediaEnabled });
 });
 
-app.get('/api/health', (_req, res) => res.json({ ok: true }));
+app.get('/api/health', (_req, res) => res.json({ ok: true, epoch, db: dbEnabled, auth: authMode }));
 
 /** Start a class. */
 app.post('/api/sessions', async (req, res) => {
@@ -41,6 +59,7 @@ app.post('/api/sessions', async (req, res) => {
   const subject = String(req.body?.subject ?? 'Physics').slice(0, 60);
   const topic = String(req.body?.topic ?? '').slice(0, 120);
   const s = store.create(user, subject, topic);
+  persist.sessionCreated(s);
   res.json({ session: s.info, boardKey: s.boardKey });
 });
 
@@ -90,7 +109,7 @@ if (existsSync(webDist)) {
 const http = createServer(app);
 const io = new Server<ClientToServer, ServerToClient>(http, {
   parser: msgpackParser,
-  cors: { origin: true, credentials: true },
+  cors: { origin: (origin, cb) => cb(null, originAllowed(origin)) },
   pingInterval: 10_000,
   pingTimeout: 8_000,
   maxHttpBufferSize: 256 * 1024,
@@ -196,8 +215,9 @@ io.on('connection', (socket: Socket<ClientToServer, ServerToClient>) => {
       s.roster.set(uid, { uid, name, online: true, hand: false, joinedAt: Date.now(), sockets: 1 });
     }
   }
+  if (role !== 'board') persist.joined(s, uid, name, role);
 
-  socket.emit('welcome', { role, me: { uid, name, clientId }, session: s.info, cls: s.cls, canWrite });
+  socket.emit('welcome', { role, me: { uid, name, clientId }, session: s.info, cls: s.cls, canWrite, epoch });
   if (role === 'teacher') socket.emit('roster', rosterList(s));
   if (role === 'student') socket.emit('hand', s.roster.get(uid)!.hand);
   pushPresence(s);
@@ -214,12 +234,15 @@ io.on('connection', (socket: Socket<ClientToServer, ServerToClient>) => {
     const ev = { ...body, seq: s.board.seq + 1, o: clientId, at: Date.now() } as BoardEvent;
     store.append(s, ev);
     io.to(room(s)).emit('b', ev);
+    persist.boardChanged(s);
   });
 
   socket.on('hand', (up) => {
     if (role !== 'student') return;
     const r = s.roster.get(uid);
-    if (!r) return;
+    if (!r || r.hand === Boolean(up)) return;
+    if (up) persist.handRaised(s, uid);
+    else persist.handLowered(s, uid, 'student');
     r.hand = Boolean(up);
     r.handAt = r.hand ? Date.now() : undefined;
     io.to(userRoom(s, uid)).emit('hand', r.hand);
@@ -230,6 +253,7 @@ io.on('connection', (socket: Socket<ClientToServer, ServerToClient>) => {
     if (role !== 'teacher') return;
     const r = s.roster.get(String(who));
     if (!r) return;
+    if (r.hand) persist.handLowered(s, r.uid, 'teacher');
     r.hand = false;
     r.handAt = undefined;
     io.to(userRoom(s, r.uid)).emit('hand', false);
@@ -244,12 +268,15 @@ io.on('connection', (socket: Socket<ClientToServer, ServerToClient>) => {
 
   socket.on('end', () => {
     if (role !== 'teacher') return;
+    if (s.ended) return;
     s.ended = true;
     s.cls.live = false;
     io.to(room(s)).emit('ended');
+    void persist.ended(s);
   });
 
   socket.on('disconnect', () => {
+    if (role !== 'board') persist.left(s, uid);
     if (role !== 'student') return;
     const r = s.roster.get(uid);
     if (!r) return;
@@ -259,6 +286,50 @@ io.on('connection', (socket: Socket<ClientToServer, ServerToClient>) => {
   });
 });
 
-http.listen(config.port, () => {
-  console.log(`NET360 Classroom server on :${config.port} — auth: ${authMode}, video: ${mediaEnabled ? 'on' : 'off'}`);
-});
+/* ------------------------------------------------------------------ */
+/* Start & stop                                                        */
+/* ------------------------------------------------------------------ */
+
+async function start() {
+  if (dbEnabled) {
+    try {
+      await migrate();
+      const n = await restoreLiveSessions();
+      if (n) console.log(`Restored ${n} live ${n === 1 ? 'class' : 'classes'} from Cloudflare D1`);
+    } catch (e) {
+      // Keep teaching even if the database is unreachable; snapshots retry on their own.
+      console.error('[db] startup failed — running without restore:', (e as Error).message);
+    }
+    startSnapshots();
+  }
+  if (process.env.NODE_ENV === 'production' && authMode === 'dev') {
+    console.warn('WARNING: FIREBASE_PROJECT_ID is not set — anyone can sign in with any name. Set it before real classes.');
+  }
+  if (process.env.NODE_ENV === 'production' && !config.allowedOrigins.length) {
+    console.warn('WARNING: ALLOWED_ORIGINS is empty — any website may call this server. Set it to your Vercel domain.');
+  }
+  http.listen(config.port, '0.0.0.0', () => {
+    console.log(
+      `NET360 Classroom server on :${config.port} — auth: ${authMode}, database: ${dbEnabled ? 'Cloudflare D1' : 'memory only'}, video: ${mediaEnabled ? 'on' : 'off'}`,
+    );
+  });
+}
+
+// Railway sends SIGTERM on redeploy: save every changed board before exiting.
+let stopping = false;
+for (const sig of ['SIGTERM', 'SIGINT'] as const) {
+  process.on(sig, async () => {
+    if (stopping) return;
+    stopping = true;
+    console.log(`${sig}: saving boards…`);
+    const timer = setTimeout(() => process.exit(0), 8000);
+    try {
+      await flushAll();
+    } finally {
+      clearTimeout(timer);
+      process.exit(0);
+    }
+  });
+}
+
+void start();

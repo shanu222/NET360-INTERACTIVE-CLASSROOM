@@ -222,6 +222,8 @@ export interface Welcome {
   cls: ClassState;
   /** Whether this client may write on the board right now. */
   canWrite: boolean;
+  /** Changes whenever the server restarts; clients then take a fresh snapshot. */
+  epoch: string;
 }
 
 /** Server → client */
