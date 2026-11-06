@@ -1,0 +1,11 @@
+# Meeto360 — search engines may index the public pages only.
+User-agent: *
+Allow: /$
+Allow: /join
+Disallow: /class/
+Disallow: /teach/
+Disallow: /board/
+Disallow: /pad/
+Disallow: /api/
+
+Sitemap: https://www.meeto360.com/sitemap.xml
