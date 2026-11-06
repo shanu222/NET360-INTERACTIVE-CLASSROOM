@@ -88,6 +88,32 @@ hira.sock.emit('chat', { text: 'Salam sir' });
 await sleep(400);
 check(t2.got.some((m) => m.text === 'Salam sir' && m.fromName === 'Hira Shah'), 'a name + code student can message the teacher');
 
+// Live: instant-send confirmation, typing and read receipts, end to end.
+const seenAtTeacher: { by: string; peer: string; at: number }[] = [];
+t2.sock.on('chatSeen', (r: { by: string; peer: string; at: number }[]) => seenAtTeacher.push(...r));
+const typingAtHira: string[] = [];
+hira.sock.on('typing', (f: string) => typingAtHira.push(f));
+const t0 = performance.now();
+let echoMs = -1;
+hira.sock.once('chat', (m: ChatMessage) => { if (m.cid === 'c-test-1') echoMs = performance.now() - t0; });
+const hiraUid = hira.got.at(-1)?.from ?? '';
+t2.sock.emit('typing', hiraUid);
+t2.sock.emit('chat', { to: hiraUid, text: 'Walaikum salam', cid: 'c-test-1' });
+await sleep(400);
+const reply = hira.got.find((m) => m.text === 'Walaikum salam');
+check(Boolean(reply), 'the teacher\'s reply reached Hira live');
+check(typingAtHira.length > 0, 'Hira saw "typing…" while the teacher wrote');
+hira.sock.emit('chatSeen', { at: reply?.at ?? 0 });
+await sleep(400);
+check(seenAtTeacher.some((r) => r.by === hiraUid && r.at === reply?.at), 'the teacher sees ✓✓ Seen once Hira reads it');
+const own = t2.got.find((m) => m.text === 'Walaikum salam');
+check(own?.cid === 'c-test-1', 'the sender gets its own message confirmed (✓ Sent)');
+console.log(`  delivery to the student: ${echoMs < 0 ? 'n/a' : echoMs.toFixed(1) + ' ms'}`);
+// A quick burst is delivered in full (no messages silently dropped).
+for (let i = 0; i < 5; i++) hira.sock.emit('chat', { text: `burst ${i}` });
+await sleep(600);
+check(t2.got.filter((m) => m.text.startsWith('burst ')).length === 5, 'a burst of 5 quick messages all arrive');
+
 for (const c of [teacher, sara, ali2, t2, hira]) c.sock.disconnect();
 console.log(failed ? `\n${failed} check(s) failed` : '\nChat works.');
 process.exit(failed ? 1 : 0);

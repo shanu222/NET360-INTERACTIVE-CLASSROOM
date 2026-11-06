@@ -12,7 +12,8 @@ import { Icon } from '../components/Icons.tsx';
 import type { ZoomCommand } from '../three/Classroom3D.tsx';
 import { codeFor, guestKey, lastName } from '../lib/code.ts';
 import { Navigate } from 'react-router-dom';
-import { ChatThread, useUnread } from '../components/Chat.tsx';
+import { ChatPop, ChatThread, useIncoming, useUnread } from '../components/Chat.tsx';
+import type { ChatMessage } from '@net360/protocol';
 
 /**
  * The student's classroom: the 3D room with the live board, classmates at
@@ -36,6 +37,9 @@ export default function Student() {
   const [mates, setMates] = useState(false);
   const me = room.welcome?.me.uid;
   const unread = useUnread(room.chats, me, () => 'teacher', chatOpen ? 'teacher' : null);
+  const teacherUid = room.chats.find((m) => m.from !== me)?.from ?? room.chats.find((m) => m.from === me && m.to)?.to ?? '';
+  const [pop, setPop] = useState<ChatMessage | null>(null);
+  useIncoming(room.chats, me, (m) => !chatOpen && setPop(m));
   const [in3d, setIn3d] = useState(prefers3d);
   // 0 = from my desk, 1 = the board fills the screen
   const [zoomCmd, setZoomCmd] = useState<ZoomCommand>({ t: 0, n: 0 });
@@ -206,11 +210,28 @@ export default function Student() {
               placeholder="Write to your teacher…"
               empty="Ask a question or say hello."
               autoFocus
-              onSend={(text) => room.socket?.emit('chat', { text })}
+              seenAt={teacherUid && me ? room.seen[`${teacherUid}|${me}`] ?? 0 : 0}
+              typing={Object.entries(room.typing).some(([, until]) => until > Date.now())}
+              typingLabel={info?.teacherName ?? 'Your teacher'}
+              onSend={(text) => room.sendChat(text)}
+              onRetry={room.retryChat}
+              onTyping={() => room.sendTyping()}
+              onSeen={(at) => room.markSeen(at)}
             />
           </motion.div>
         )}
       </AnimatePresence>
+
+      {!chatOpen && (
+        <ChatPop
+          msg={pop}
+          onClose={() => setPop(null)}
+          onOpen={() => {
+            setPop(null);
+            setChatOpen(true);
+          }}
+        />
+      )}
 
       <AnimatePresence>
         {toast && (

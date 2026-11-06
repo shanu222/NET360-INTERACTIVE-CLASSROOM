@@ -16,7 +16,8 @@ import { Icon } from '../components/Icons.tsx';
 import { StatusPill, friendly } from './Student.tsx';
 import { Classroom3D, can3d } from '../lib/webgl.ts';
 import { Lobby } from '../components/Lobby.tsx';
-import { ChatThread, useUnread } from '../components/Chat.tsx';
+import { ChatPop, ChatThread, useIncoming, useUnread } from '../components/Chat.tsx';
+import type { ChatMessage } from '@net360/protocol';
 
 const KEY_TOOLS: Record<string, PenSettings['tool']> = { p: 'pen', h: 'highlighter', e: 'eraser', l: 'line', a: 'arrow', r: 'rect', c: 'circle' };
 const KEY_COLORS = [INK.chalk, INK.amber, INK.sky, INK.mint, INK.coral];
@@ -167,6 +168,11 @@ export default function Teacher() {
       .sort((a, b) => b.at - a.at || Number(b.online) - Number(a.online) || a.name.localeCompare(b.name));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [room.chats, room.roster, me]);
+  const [pop, setPop] = useState<ChatMessage | null>(null);
+  useIncoming(room.chats, me, (m) => {
+    if (!(panel === 'chat' && thread === m.from)) setPop(m);
+  });
+  const isTyping = (uid: string) => (room.typing[uid] ?? 0) > Date.now();
   const chatWith = (uid: string) => {
     setThread(uid);
     setPanel('chat');
@@ -175,10 +181,16 @@ export default function Teacher() {
   // "Ali Khan joined" — a quiet notice as each student takes a seat.
   const [joined, setJoined] = useState<string[]>([]);
   const seenRef = useRef<Set<string> | null>(null);
+  const openedAt = useRef(0);
+  useEffect(() => {
+    if (room.welcome) openedAt.current = Date.now();
+  }, [room.welcome]);
   useEffect(() => {
     const online = room.roster.filter((r) => r.online);
-    if (!seenRef.current) {
-      if (room.welcome) seenRef.current = new Set(online.map((r) => r.uid));
+    if (!room.welcome) return;
+    // Students already in class when this screen opens are not announced.
+    if (!seenRef.current || Date.now() - openedAt.current < 2500) {
+      seenRef.current = new Set([...(seenRef.current ?? []), ...online.map((r) => r.uid)]);
       return;
     }
     const fresh = online.filter((r) => !seenRef.current!.has(r.uid));
@@ -383,7 +395,7 @@ export default function Teacher() {
                       </button>
                       <span>
                         <strong>{threads.find((t) => t.uid === thread)?.name ?? 'Student'}</strong>
-                        <small>{threads.find((t) => t.uid === thread)?.online ? 'In class' : 'Left the class'}</small>
+                        <small>{isTyping(thread) ? 'typing…' : threads.find((t) => t.uid === thread)?.online ? 'In class' : 'Left the class'}</small>
                       </span>
                     </div>
                     <ChatThread
@@ -392,7 +404,13 @@ export default function Teacher() {
                       placeholder="Write a private message…"
                       empty="Only this student will see your message."
                       autoFocus
-                      onSend={(text) => room.socket?.emit('chat', { to: thread, text })}
+                      seenAt={me ? room.seen[`${thread}|${me}`] ?? 0 : 0}
+                      typing={isTyping(thread)}
+                      typingLabel={threads.find((t) => t.uid === thread)?.name ?? 'Student'}
+                      onSend={(text) => room.sendChat(text, thread)}
+                      onRetry={room.retryChat}
+                      onTyping={() => room.sendTyping(thread)}
+                      onSeen={(at) => room.markSeen(at, thread)}
                     />
                   </>
                 ) : (
@@ -406,7 +424,10 @@ export default function Teacher() {
                           <li key={t.uid}>
                             <button onClick={() => setThread(t.uid)}>
                               <span className={`threads__dot ${t.online ? 'is-on' : ''}`} />
-                              <span className="threads__name">{t.name}</span>
+                              <span className="threads__name">
+                                {t.name}
+                                {isTyping(t.uid) && <small className="threads__typing">typing…</small>}
+                              </span>
                               {unread.by[t.uid] ? <b>{unread.by[t.uid]}</b> : null}
                             </button>
                           </li>
@@ -493,6 +514,10 @@ export default function Teacher() {
             </button>
           </div>
         </div>
+      )}
+
+      {!(panel === 'chat' && thread === pop?.from) && (
+        <ChatPop msg={pop} onClose={() => setPop(null)} onOpen={() => { if (pop) chatWith(pop.from); setPop(null); }} />
       )}
 
       <div className="joined" aria-live="polite">

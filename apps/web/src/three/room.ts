@@ -52,14 +52,18 @@ function box(w: number, h: number, d: number, mat: MeshStandardMaterial | MeshBa
 }
 
 /** A framed artwork hung flat on a wall. `ry` turns it to face into the room. */
-function framed(art: Texture, w: number, h: number, frameColor: string, mat: boolean) {
+function framed(art: Texture, w: number, h: number, frameColor: string, mat: boolean, glow = 0) {
   const g = new Group();
   const frameW = 0.06;
   const frame = std({ color: frameColor, roughness: 0.45, metalness: 0.15 });
   g.add(box(w + frameW * 2, h + frameW * 2, 0.05, frame, 0, 0, 0, false));
   if (mat) g.add(box(w + 0.001, h + 0.001, 0.052, std({ color: '#f3ecdf', roughness: 0.9 }), 0, 0, 0.001, false));
   const inner = mat ? 0.82 : 1;
-  const canvas = new Mesh(new PlaneGeometry(w * inner, h * inner), std({ map: art, roughness: 0.75 }));
+  // `glow` lifts prints with text a little above the room light, so they stay crisp and readable.
+  const canvas = new Mesh(
+    new PlaneGeometry(w * inner, h * inner),
+    std({ map: art, roughness: 0.75, ...(glow ? { emissive: '#ffffff', emissiveMap: art, emissiveIntensity: glow } : {}) }),
+  );
   canvas.position.z = 0.03;
   g.add(canvas);
   return g;
@@ -151,13 +155,13 @@ export function buildRoom(opts: { shadows: boolean }): Room {
 
   /* ---------- art on the front wall ---------- */
   const plates: [Texture, number, number, number, number][] = [
-    [T.plateMaxwell(), 1.0, 1.17, -4.75, 2.95],
-    [T.plateSpiral(), 1.04, 0.78, -4.75, 1.65],
-    [T.plateEuler(), 1.0, 1.17, 4.75, 2.95],
-    [T.plateLens(), 1.04, 0.78, 4.75, 1.65],
+    [T.plateMaxwell(), 1.25, 1.46, -4.85, 3.0],
+    [T.plateSpiral(), 1.3, 0.98, -4.85, 1.58],
+    [T.plateEuler(), 1.25, 1.46, 4.85, 3.0],
+    [T.plateLens(), 1.3, 0.98, 4.85, 1.58],
   ];
   for (const [art, w, h, x, y] of plates) {
-    const f = framed(art, w, h, '#1f1813', true);
+    const f = framed(art, w, h, '#1f1813', true, 0.35);
     f.position.set(x, y, 0.03);
     g.add(f);
   }
@@ -165,7 +169,7 @@ export function buildRoom(opts: { shadows: boolean }): Room {
   /* ---------- paintings on the right wall, with picture lights ---------- */
   const paintings: [Texture, number, number, number, number][] = [
     [T.paintingLandscape(), 2.1, 1.4, 4.4, 2.55],
-    [T.paintingAbstract(), 1.25, 1.58, 9.4, 2.6],
+    [T.paintingOrbits(), 1.25, 1.58, 9.3, 2.6],
     [T.paintingSea(), 2.2, 1.32, 13.6, 2.55],
   ];
   const brass = std({ color: '#b08d57', roughness: 0.35, metalness: 0.8 });
@@ -191,16 +195,23 @@ export function buildRoom(opts: { shadows: boolean }): Room {
   overShelf.position.set(4.6, 3.35, D - 0.03);
   overShelf.rotation.y = Math.PI;
   g.add(overShelf);
-  const overShelf2 = framed(T.paintingAbstract(), 0.86, 1.09, '#b08d57', false);
-  overShelf2.position.set(-4.6, 3.32, D - 0.03);
+  const overShelf2 = framed(T.paintingBlooms(), 1.6, 1.14, '#b08d57', false);
+  overShelf2.position.set(-4.6, 3.35, D - 0.03);
   overShelf2.rotation.y = Math.PI;
   g.add(overShelf2);
+  // Two colourful paintings either side of the night sky.
+  for (const [art, x] of [[T.paintingBalloons(), -2.25], [T.paintingRainbow(), 2.25]] as const) {
+    const f = framed(art, 1.3, 1.62, '#b08d57', false);
+    f.position.set(x, 2.25, D - 0.03);
+    f.rotation.y = Math.PI;
+    g.add(f);
+  }
   // An inscription across the top of the back wall.
   const words = new Mesh(
-    new PlaneGeometry(6.4, 0.69),
+    new PlaneGeometry(7.6, 0.82),
     new MeshBasicMaterial({ map: T.inscription('The important thing is not to stop questioning.', 'Albert Einstein'), transparent: true }),
   );
-  words.position.set(0, 3.85, D - 0.02);
+  words.position.set(0, 3.98, D - 0.02);
   words.rotation.y = Math.PI;
   g.add(words);
 
@@ -213,8 +224,8 @@ export function buildRoom(opts: { shadows: boolean }): Room {
     ['Measure what is measurable, and make measurable what is not so.', 'Galileo Galilei', 'Attributed', W / 2 - 0.03, 11.55],
   ];
   for (const [q, a, n, x, z] of quotes) {
-    const f = framed(T.quotePlate(q, a, n), 0.78, 1.01, '#2a2119', true);
-    f.position.set(x, 2.5, z);
+    const f = framed(T.quotePlate(q, a, n), 1.6, 1.1, '#2a2119', false, 0.4);
+    f.position.set(x, 2.55, z);
     f.rotation.y = x < 0 ? Math.PI / 2 : -Math.PI / 2;
     g.add(f);
   }

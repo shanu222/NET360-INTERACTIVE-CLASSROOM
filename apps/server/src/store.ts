@@ -6,6 +6,7 @@ import {
   emptyBoard,
   type BoardEvent,
   type ChatMessage,
+  type ChatSeen,
   type BoardState,
   type ClassState,
   type RosterEntry,
@@ -28,6 +29,8 @@ export interface Session {
   lastActive: number;
   /** Private teacher–student messages (most recent kept in memory). */
   chats: ChatMessage[];
+  /** Read receipts, keyed `${by}|${peer}`. */
+  seen: Map<string, ChatSeen>;
 }
 
 /**
@@ -54,6 +57,7 @@ class Store {
       ended: false,
       lastActive: Date.now(),
       chats: [],
+      seen: new Map(),
     };
     this.byId.set(id, s);
     this.byCode.set(code, id);
@@ -72,6 +76,7 @@ class Store {
       ended: false,
       lastActive: Date.now(),
       chats: [],
+      seen: new Map(),
     };
     this.byId.set(s.info.id, s);
     this.byCode.set(s.info.code, s.info.id);

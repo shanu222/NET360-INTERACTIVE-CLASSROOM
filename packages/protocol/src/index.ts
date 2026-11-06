@@ -226,7 +226,12 @@ export interface ChatMessage {
   to: string;
   text: string;
   at: number;
+  /** The sender's own temporary id, so their screen can swap the pending copy for this one. */
+  cid?: string;
 }
+
+/** `by` has read the conversation with `peer` up to `at`. */
+export interface ChatSeen { by: string; peer: string; at: number }
 
 /** What every screen knows about the people in class (for the 3D room). */
 export interface PersonPublic {
@@ -269,6 +274,10 @@ export interface ServerToClient {
   chat: (m: ChatMessage) => void;
   /** Earlier messages, sent once after connecting. */
   chatHistory: (m: ChatMessage[]) => void;
+  /** Read receipts (sent with history too). */
+  chatSeen: (s: ChatSeen[]) => void;
+  /** The other person is typing. */
+  typing: (from: string) => void;
 }
 
 /** Client → server */
@@ -282,7 +291,11 @@ export interface ClientToServer {
   cls: (patch: Partial<Pick<ClassState, 'showJoin'>>) => void;
   end: () => void;
   /** Students write to the teacher; the teacher writes to one student (`to`). */
-  chat: (msg: { to?: string; text: string }) => void;
+  chat: (msg: { to?: string; text: string; cid?: string }) => void;
+  /** I have read my conversation with `peer` (students: omit) up to `at`. */
+  chatSeen: (msg: { peer?: string; at: number }) => void;
+  /** I am typing to `to` (students: omit). */
+  typing: (to?: string) => void;
 }
 
 export interface SocketAuth {

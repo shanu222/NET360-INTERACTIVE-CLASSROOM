@@ -425,6 +425,203 @@ export function paintingPlanet(): Texture {
   return tex(c);
 }
 
+/** Hot-air balloons drifting over green hills — bright and cheerful. */
+export function paintingBalloons(): Texture {
+  const W = 800, H = 1000;
+  const [c, ctx] = make(W, H);
+  const sky = ctx.createLinearGradient(0, 0, 0, H);
+  sky.addColorStop(0, '#2f8fd8');
+  sky.addColorStop(0.6, '#8fd0f5');
+  sky.addColorStop(1, '#fff1c9');
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, W, H);
+  const r = rng(71);
+  ctx.fillStyle = 'rgba(255,255,255,0.85)';
+  for (let i = 0; i < 6; i++) {
+    const x = r() * W, y = 80 + r() * 420;
+    for (let k = 0; k < 5; k++) {
+      ctx.beginPath();
+      ctx.arc(x + k * 34 - 60, y + Math.sin(k) * 12, 30 + r() * 18, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  ridge(ctx, W, H * 0.78, 40, 72, '#7cc35b', H);
+  ridge(ctx, W, H * 0.86, 30, 73, '#4fa043', H);
+  ridge(ctx, W, H * 0.93, 20, 74, '#2f7a38', H);
+  const balloon = (x: number, y: number, s: number, cols: string[]) => {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(s, s);
+    const n = cols.length * 2;
+    for (let i = 0; i < n; i++) {
+      ctx.fillStyle = cols[i % cols.length];
+      ctx.beginPath();
+      const a0 = -Math.PI / 2 - Math.PI / 2 + (i / n) * Math.PI * 2 * 0.5;
+      ctx.moveTo(0, 120);
+      ctx.ellipse(0, 0, 100 * Math.abs(Math.cos(a0)) + 1, 110, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // stripes as vertical segments
+    for (let i = 0; i < n; i++) {
+      const x0 = -100 + (i * 200) / n, x1 = -100 + ((i + 1) * 200) / n;
+      ctx.save();
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 100, 110, 0, 0, Math.PI * 2);
+      ctx.moveTo(-60, 85);
+      ctx.lineTo(0, 150);
+      ctx.lineTo(60, 85);
+      ctx.clip();
+      ctx.fillStyle = cols[i % cols.length];
+      ctx.fillRect(x0, -120, x1 - x0 + 1, 280);
+      ctx.restore();
+    }
+    ctx.strokeStyle = '#5a4030';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(-30, 140);
+    ctx.lineTo(-18, 185);
+    ctx.moveTo(30, 140);
+    ctx.lineTo(18, 185);
+    ctx.stroke();
+    ctx.fillStyle = '#8b5a2b';
+    ctx.fillRect(-22, 185, 44, 30);
+    ctx.restore();
+  };
+  balloon(W * 0.32, H * 0.36, 1.25, ['#e63946', '#ffd166', '#f77f00']);
+  balloon(W * 0.74, H * 0.22, 0.8, ['#7b2cbf', '#4cc9f0', '#f72585']);
+  balloon(W * 0.68, H * 0.58, 0.55, ['#06d6a0', '#ffd166', '#118ab2']);
+  balloon(W * 0.16, H * 0.66, 0.4, ['#ff006e', '#fb5607', '#ffbe0b']);
+  brushwork(ctx, W, H, 7000, 8, 75);
+  return tex(c);
+}
+
+/** A rainbow after rain, over a mountain lake with its reflection. */
+export function paintingRainbow(): Texture {
+  const W = 800, H = 1000;
+  const [c, ctx] = make(W, H);
+  const sky = ctx.createLinearGradient(0, 0, 0, H * 0.62);
+  sky.addColorStop(0, '#4f7fb8');
+  sky.addColorStop(0.55, '#a9cfe9');
+  sky.addColorStop(1, '#fde9c2');
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, W, H);
+  // the rainbow, centred low on the left
+  const cx = W * 0.38, cy = H * 0.66;
+  const bands = ['#e8343c', '#f6892b', '#f7d23a', '#3fbf5a', '#2f9be0', '#4a55c9', '#8a46c4'];
+  ctx.globalAlpha = 0.85;
+  bands.forEach((col, i) => {
+    ctx.strokeStyle = col;
+    ctx.lineWidth = 20;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 470 - i * 20, Math.PI, Math.PI * 2);
+    ctx.stroke();
+  });
+  ctx.globalAlpha = 1;
+  ridge(ctx, W, H * 0.5, 60, 111, '#7d93a8', H);
+  ridge(ctx, W, H * 0.57, 40, 112, '#4f7a5e', H);
+  // the lake, with a soft mirror of the sky
+  const lake = ctx.createLinearGradient(0, H * 0.64, 0, H);
+  lake.addColorStop(0, '#9cc6df');
+  lake.addColorStop(1, '#2f6f8f');
+  ctx.fillStyle = lake;
+  ctx.fillRect(0, H * 0.64, W, H * 0.36);
+  ctx.globalAlpha = 0.3;
+  bands.forEach((col, i) => {
+    ctx.strokeStyle = col;
+    ctx.lineWidth = 14;
+    ctx.beginPath();
+    ctx.ellipse(cx, H * 0.64, 470 - i * 20, 120 - i * 5, 0, 0, Math.PI);
+    ctx.stroke();
+  });
+  ctx.globalAlpha = 1;
+  ridge(ctx, W, H * 0.9, 16, 113, '#2f5e38', H);
+  brushwork(ctx, W, H, 9000, 8, 115);
+  return tex(c);
+}
+
+/** Rows of tulips in bloom under a warm sky. */
+export function paintingBlooms(): Texture {
+  const W = 900, H = 640;
+  const [c, ctx] = make(W, H);
+  const sky = ctx.createLinearGradient(0, 0, 0, H * 0.45);
+  sky.addColorStop(0, '#5bb6f0');
+  sky.addColorStop(1, '#ffe7b3');
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = '#ffd36b';
+  ctx.beginPath();
+  ctx.arc(W * 0.8, H * 0.15, 46, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#5c9e45';
+  ctx.fillRect(0, H * 0.42, W, H * 0.58);
+  const rows = ['#e5383b', '#ffba08', '#ff4d9d', '#9d4edd', '#f48c06', '#e5383b'];
+  const r = rng(91);
+  rows.forEach((col, i) => {
+    const y0 = H * 0.45 + i * i * 9 + i * 18;
+    const size = 5 + i * 3.2;
+    for (let x = -10; x < W + 20; x += size * 2.1) {
+      const y = y0 + (r() - 0.5) * size;
+      ctx.strokeStyle = '#2e6b2b';
+      ctx.lineWidth = Math.max(1, size * 0.25);
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x, y + size * 2.2);
+      ctx.stroke();
+      ctx.fillStyle = col;
+      ctx.beginPath();
+      ctx.ellipse(x, y, size * 0.8, size, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  });
+  brushwork(ctx, W, H, 9000, 8, 93);
+  return tex(c);
+}
+
+/** Bright planets on their orbits around a golden sun. */
+export function paintingOrbits(): Texture {
+  const W = 600, H = 760;
+  const [c, ctx] = make(W, H);
+  const bg = ctx.createLinearGradient(0, 0, W, H);
+  bg.addColorStop(0, '#0f2a5c');
+  bg.addColorStop(1, '#3a1a5e');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, W, H);
+  const cx = W * 0.5, cy = H * 0.52;
+  const sun = ctx.createRadialGradient(cx, cy, 6, cx, cy, 70);
+  sun.addColorStop(0, '#fff6c2');
+  sun.addColorStop(0.5, '#ffc93c');
+  sun.addColorStop(1, 'rgba(255,140,40,0)');
+  ctx.fillStyle = sun;
+  ctx.beginPath();
+  ctx.arc(cx, cy, 70, 0, Math.PI * 2);
+  ctx.fill();
+  const planets: [number, number, number, string][] = [
+    [80, 0.7, 10, '#ff6b6b'],
+    [130, 2.4, 15, '#4cc9f0'],
+    [185, 4.1, 13, '#ff9f1c'],
+    [240, 5.6, 22, '#f72585'],
+    [290, 1.5, 18, '#06d6a0'],
+  ];
+  for (const [rad, a, size, col] of planets) {
+    ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, rad, rad * 0.86, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = col;
+    ctx.beginPath();
+    ctx.arc(cx + Math.cos(a) * rad, cy + Math.sin(a) * rad * 0.86, size, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  const r = rng(101);
+  for (let i = 0; i < 300; i++) {
+    ctx.fillStyle = `rgba(255,255,255,${r() * 0.8})`;
+    ctx.fillRect(r() * W, r() * H, 2, 2);
+  }
+  brushwork(ctx, W, H, 5000, 7, 103);
+  return tex(c);
+}
+
 /* ------------------------------------------------------------------ */
 /* Quotes                                                              */
 /* ------------------------------------------------------------------ */
@@ -445,33 +642,40 @@ function wrap(ctx: Ctx, text: string, width: number): string[] {
   return lines;
 }
 
-/** A framed quotation from a scientist, set like a print on ivory paper. */
+/**
+ * A framed quotation from a scientist, set large and dark on ivory so it can be
+ * read from the back row.
+ */
 export function quotePlate(quote: string, author: string, note: string): Texture {
-  const W = 600, H = 780;
+  const W = 1600, H = 1100;
   const [c, ctx] = paper(W, H);
-  ctx.fillStyle = 'rgba(201,154,63,0.85)';
-  ctx.font = 'italic 400 150px Fraunces, Georgia, serif';
+  // a thin gold rule inside the edge
+  ctx.strokeStyle = 'rgba(176,132,60,0.9)';
+  ctx.lineWidth = 6;
+  ctx.strokeRect(40, 40, W - 80, H - 80);
+  ctx.fillStyle = '#b8862f';
+  ctx.font = 'italic 500 260px Fraunces, Georgia, serif';
   ctx.textAlign = 'left';
-  ctx.fillText('“', 56, 190);
-  ctx.fillStyle = '#2a2119';
-  let size = 46;
+  ctx.fillText('“', 90, 300);
+  ctx.fillStyle = '#17110c';
+  let size = 128;
   let lines: string[] = [];
-  for (; size >= 30; size -= 2) {
-    ctx.font = `italic 400 ${size}px Fraunces, Georgia, serif`;
-    lines = wrap(ctx, quote, W - 130);
-    if (lines.length * size * 1.3 < H - 330) break;
+  for (; size >= 80; size -= 4) {
+    ctx.font = `italic 600 ${size}px Fraunces, Georgia, serif`;
+    lines = wrap(ctx, quote, W - 300);
+    if (lines.length * size * 1.18 < H - 470) break;
   }
-  const top = 230;
-  lines.forEach((l, i) => ctx.fillText(l, 66, top + i * size * 1.3));
-  const y = top + lines.length * size * 1.3 + 40;
-  ctx.fillStyle = 'rgba(201,154,63,0.9)';
-  ctx.fillRect(66, y - 6, 60, 3);
-  ctx.fillStyle = '#2a2119';
-  ctx.font = '600 30px Inter, system-ui, sans-serif';
-  ctx.fillText(author, 66, y + 40);
-  ctx.fillStyle = '#6b5d4f';
-  ctx.font = '400 22px Inter, system-ui, sans-serif';
-  ctx.fillText(note, 66, y + 76);
+  const top = 250 + size * 0.85;
+  lines.forEach((l, i) => ctx.fillText(l, 170, top + i * size * 1.18));
+  const y = top + (lines.length - 1) * size * 1.18 + 120;
+  ctx.fillStyle = '#b8862f';
+  ctx.fillRect(170, y - 20, 120, 8);
+  ctx.fillStyle = '#17110c';
+  ctx.font = '700 76px Inter, system-ui, sans-serif';
+  ctx.fillText(author, 170, y + 62);
+  ctx.fillStyle = '#4a3c2e';
+  ctx.font = '500 46px Inter, system-ui, sans-serif';
+  ctx.fillText(note, 170, y + 130, W - 340);
   return tex(c);
 }
 
@@ -480,13 +684,13 @@ export function inscription(text: string, author: string): Texture {
   const W = 2400, H = 260;
   const [c, ctx] = make(W, H);
   ctx.clearRect(0, 0, W, H);
-  ctx.fillStyle = 'rgba(58,44,32,0.88)';
+  ctx.fillStyle = '#2b1f15';
   ctx.textAlign = 'center';
-  ctx.font = 'italic 400 104px Fraunces, Georgia, serif';
+  ctx.font = 'italic 600 118px Fraunces, Georgia, serif';
   ctx.fillText(text, W / 2, 130, W - 80);
-  ctx.font = '500 40px Inter, system-ui, sans-serif';
-  ctx.letterSpacing = '10px';
-  ctx.fillStyle = 'rgba(122,90,61,0.9)';
+  ctx.font = '700 46px Inter, system-ui, sans-serif';
+  ctx.letterSpacing = '12px';
+  ctx.fillStyle = '#8a5f2c';
   ctx.fillText(author.toUpperCase(), W / 2, 215);
   ctx.letterSpacing = '0px';
   const t = new CanvasTexture(c);
@@ -499,7 +703,7 @@ export function inscription(text: string, author: string): Texture {
 /* Scientific plates — engraved line art on ivory                      */
 /* ------------------------------------------------------------------ */
 
-const INK = '#4f3f30';
+const INK = '#21180f';
 
 function paper(w: number, h: number): [HTMLCanvasElement, Ctx] {
   const [c, ctx] = make(w, h);
@@ -511,9 +715,9 @@ function paper(w: number, h: number): [HTMLCanvasElement, Ctx] {
 
 function caption(ctx: Ctx, text: string, w: number, y: number) {
   ctx.fillStyle = INK;
-  ctx.globalAlpha = 0.75;
+  ctx.globalAlpha = 1;
   ctx.textAlign = 'center';
-  ctx.font = '500 17px Inter, system-ui, sans-serif';
+  ctx.font = '700 30px Inter, system-ui, sans-serif';
   ctx.letterSpacing = '5px';
   ctx.fillText(text, w / 2, y);
   ctx.letterSpacing = '0px';
@@ -534,10 +738,10 @@ export function plateMaxwell(): Texture {
   ctx.globalAlpha = 1;
   ctx.fillStyle = INK;
   ctx.textAlign = 'center';
-  ctx.font = 'italic 400 34px Fraunces, Georgia, serif';
-  ['∇ · E = ρ / ε₀', '∇ · B = 0', '∇ × E = − ∂B/∂t'].forEach((l, i) => ctx.fillText(l, 240, 185 + i * 66));
-  ctx.font = 'italic 400 29px Fraunces, Georgia, serif';
-  ctx.fillText('∇ × B = μ₀J + μ₀ε₀ ∂E/∂t', 240, 383);
+  ctx.font = 'italic 600 46px Fraunces, Georgia, serif';
+  ['∇ · E = ρ / ε₀', '∇ · B = 0', '∇ × E = − ∂B/∂t'].forEach((l, i) => ctx.fillText(l, 240, 190 + i * 66, 420));
+  ctx.font = 'italic 600 36px Fraunces, Georgia, serif';
+  ctx.fillText('∇ × B = μ₀J + μ₀ε₀ ∂E/∂t', 240, 388, 440);
   caption(ctx, 'MAXWELL · 1865', 480, 500);
   return tex(c);
 }
@@ -569,13 +773,13 @@ export function plateEuler(): Texture {
   ctx.arc(325, 145, 6, 0, Math.PI * 2);
   ctx.fill();
   ctx.textAlign = 'center';
-  ctx.font = 'italic 400 40px Fraunces, Georgia, serif';
-  ctx.fillText('e', 196, 440);
-  ctx.font = 'italic 400 26px Fraunces, Georgia, serif';
-  ctx.fillText('iπ', 222, 420);
-  ctx.font = 'italic 400 40px Fraunces, Georgia, serif';
-  ctx.fillText('+ 1 = 0', 300, 440);
-  caption(ctx, 'EULER · 1748', 480, 510);
+  ctx.font = 'italic 600 58px Fraunces, Georgia, serif';
+  ctx.fillText('e', 172, 452);
+  ctx.font = 'italic 600 36px Fraunces, Georgia, serif';
+  ctx.fillText('iπ', 210, 424);
+  ctx.font = 'italic 600 58px Fraunces, Georgia, serif';
+  ctx.fillText('+ 1 = 0', 312, 452);
+  caption(ctx, 'EULER · 1748', 480, 520);
   return tex(c);
 }
 
@@ -647,10 +851,10 @@ export function plateLens(): Texture {
     ctx.arc(x, 200, 5, 0, Math.PI * 2);
     ctx.fill();
   }
-  ctx.font = 'italic 400 22px Fraunces, Georgia, serif';
+  ctx.font = 'italic 600 34px Fraunces, Georgia, serif';
   ctx.textAlign = 'center';
-  ctx.fillText('F', 200, 232);
-  ctx.fillText('F′', 360, 184);
+  ctx.fillText('F', 200, 240);
+  ctx.fillText('F′', 360, 180);
   caption(ctx, 'OPTICS · THIN LENS', 560, 385);
   return tex(c);
 }

@@ -321,14 +321,46 @@ io.on('connection', (socket: Socket<ClientToServer, ServerToClient>) => {
     'chatHistory',
     role === 'teacher' ? s.chats : role === 'student' ? s.chats.filter((m) => m.from === uid || m.to === uid) : [],
   );
-  let lastChat = 0;
+  if (role !== 'board') {
+    const mine = [...s.seen.values()].filter((r) => (role === 'teacher' ? true : r.by === uid || r.peer === uid));
+    if (mine.length) socket.emit('chatSeen', mine);
+  }
+  /** The other side of a conversation: a student always talks to the teacher. */
+  const peerOf = (to?: string) => (role === 'teacher' ? String(to ?? '') : s.teacherUid);
+  /** Where a conversation's updates go: the teacher's screens and that student's screens. */
+  const convo = (studentUid: string) => io.to(teacherRoom(s)).to(userRoom(s, studentUid));
+  socket.on('chatSeen', (msg) => {
+    if (role === 'board') return;
+    const peer = peerOf(msg?.peer);
+    const at = Number(msg?.at);
+    if (!peer || !Number.isFinite(at) || (role === 'teacher' && !s.roster.has(peer))) return;
+    const key = `${uid}|${peer}`;
+    if ((s.seen.get(key)?.at ?? 0) >= at) return;
+    const r = { by: uid, peer, at: Math.min(at, Date.now()) };
+    s.seen.set(key, r);
+    convo(role === 'teacher' ? peer : uid).emit('chatSeen', [r]);
+  });
+  let lastTyping = 0;
+  socket.on('typing', (to) => {
+    if (role === 'board') return;
+    const now = Date.now();
+    if (now - lastTyping < 800) return;
+    lastTyping = now;
+    if (role === 'teacher') {
+      const peer = String(to ?? '');
+      if (s.roster.has(peer)) io.to(userRoom(s, peer)).emit('typing', uid);
+    } else io.to(teacherRoom(s)).emit('typing', uid);
+  });
+  let chatTimes: number[] = [];
   socket.on('chat', (msg) => {
     if (role === 'board' || s.ended) return;
     const text = String(msg?.text ?? '').trim().slice(0, 1000);
     if (!text) return;
     const now = Date.now();
-    if (now - lastChat < 300) return; // flood guard
-    lastChat = now;
+    // Flood guard: up to 8 messages in any 5 seconds.
+    chatTimes = chatTimes.filter((t) => now - t < 5000);
+    if (chatTimes.length >= 8) return;
+    chatTimes.push(now);
     let to: string;
     if (role === 'teacher') {
       to = String(msg?.to ?? '');
@@ -336,7 +368,8 @@ io.on('connection', (socket: Socket<ClientToServer, ServerToClient>) => {
     } else {
       to = s.teacherUid;
     }
-    const m: ChatMessage = { id: nanoid(10), from: uid, fromName: name, to, text, at: now };
+    const cid = typeof msg?.cid === 'string' ? msg.cid.slice(0, 24) : undefined;
+    const m: ChatMessage = { id: nanoid(10), from: uid, fromName: name, to, text, at: now, ...(cid ? { cid } : {}) };
     s.chats.push(m);
     if (s.chats.length > 3000) s.chats.splice(0, s.chats.length - 2500);
     const studentUid = role === 'teacher' ? to : uid;
