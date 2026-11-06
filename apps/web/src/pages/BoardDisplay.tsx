@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { Suspense, useState, type ReactNode } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import type { BoardRenderer } from '@net360/board-engine';
@@ -6,6 +6,8 @@ import { useClassroom } from '../lib/classroom.ts';
 import { useIdle, usePageInfo, useWakeLock } from '../lib/hooks.ts';
 import { joinUrl } from '../lib/api.ts';
 import { Environment } from '../components/Environment.tsx';
+import { Classroom3D, can3d } from '../lib/webgl.ts';
+import { friendly } from './Student.tsx';
 import { Board } from '../components/Board.tsx';
 import { Code, QR } from '../components/QR.tsx';
 import { Icon } from '../components/Icons.tsx';
@@ -28,59 +30,78 @@ export default function BoardDisplay() {
   // Before anything is written the join card takes centre stage; afterwards it moves to a corner.
   const big = pg.inked === 0 && pg.pages === 1;
 
-  return (
-    <Environment variant="display">
-      <header className="display-title">
-        {info && (
-          <>
-            <span className="display-title__subject">{info.subject}</span>
-            {info.topic && <span className="display-title__topic">{info.topic}</span>}
-          </>
-        )}
-        {room.status === 'live' && (
-          <span className="pill pill--live">
-            <span className="live-dot" /> LIVE
-          </span>
-        )}
-        {room.status === 'reconnecting' && <span className="pill pill--wait">Reconnecting…</span>}
-      </header>
-
-      <Board board={room.board} onRenderer={setRenderer}>
-        <AnimatePresence>
-          {showJoin && info && (
-            <motion.div
-              key={big ? 'big' : 'corner'}
-              className={`joincard ${big ? 'joincard--big' : 'joincard--corner'}`}
-              initial={{ opacity: 0, scale: 0.96 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.96 }}
-              transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-            >
-              <QR text={joinUrl(info.code)} size={big ? 260 : 132} />
-              <div className="joincard__text">
-                {big && <p className="joincard__eyebrow">Join the class</p>}
-                <Code code={info.code} />
-                <p className="joincard__hint">
-                  {big ? 'Scan with your phone camera, or open NET360 and enter the code.' : 'Scan to join'}
+  const onBoard: ReactNode = (
+    <>
+      <AnimatePresence>
+        {showJoin && info && (
+          <motion.div
+            key={big ? 'big' : 'corner'}
+            className={`joincard ${big ? 'joincard--big' : 'joincard--corner'}`}
+            initial={{ opacity: 0, scale: 0.96 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.96 }}
+            transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+          >
+            <QR text={joinUrl(info.code)} size={big ? 260 : 132} />
+            <div className="joincard__text">
+              {big && <p className="joincard__eyebrow">Join the class</p>}
+              <Code code={info.code} />
+              <p className="joincard__hint">
+                {big ? 'Scan with your phone camera, or open NET360 and enter the code.' : 'Scan to join'}
+              </p>
+              {big && (
+                <p className="joincard__count">
+                  {present === 0 ? 'Waiting for the first student…' : `${present} ${present === 1 ? 'student' : 'students'} in class`}
                 </p>
-                {big && (
-                  <p className="joincard__count">
-                    {present === 0 ? 'Waiting for the first student…' : `${present} ${present === 1 ? 'student' : 'students'} inside`}
-                  </p>
-                )}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-        {pg.pages > 1 && <span className="board-page">{pg.page + 1} / {pg.pages}</span>}
-      </Board>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      {pg.pages > 1 && <span className="board-page">{pg.page + 1} / {pg.pages}</span>}
+    </>
+  );
 
-      {room.status === 'ended' && <div className="display-end">Class has ended · Notes are saved on every student's device</div>}
+  const title = (
+    <header className="display-title">
+      {info && (
+        <>
+          <span className="display-title__subject">{info.subject}</span>
+          {info.topic && <span className="display-title__topic">{info.topic}</span>}
+        </>
+      )}
+      {room.status === 'live' && (
+        <span className="pill pill--live">
+          <span className="live-dot" /> LIVE
+        </span>
+      )}
+      {room.status === 'reconnecting' && <span className="pill pill--wait">Reconnecting…</span>}
+    </header>
+  );
+
+  return (
+    <div className="stage3d stage3d--display">
+      {can3d() ? (
+        <Suspense fallback={<div className="stage3d__loading" />}>
+          <Classroom3D view="display" board={room.board} people={room.people} teacherName={info?.teacherName ?? null} onRenderer={setRenderer}>
+            {onBoard}
+          </Classroom3D>
+        </Suspense>
+      ) : (
+        <Environment variant="display">
+          <Board board={room.board} onRenderer={setRenderer}>
+            {onBoard}
+          </Board>
+        </Environment>
+      )}
+      {title}
+
+      {room.status === 'ended' && <div className="display-end">Class has ended · Thank you for joining</div>}
       {room.status === 'error' && (
         <div className="veil">
           <div className="veil__card">
             <h2>Board not connected</h2>
-            <p>{room.error}</p>
+            <p>{friendly(room.error)}</p>
           </div>
         </div>
       )}
@@ -92,6 +113,6 @@ export default function BoardDisplay() {
       >
         <Icon.expand /> Full screen
       </button>
-    </Environment>
+    </div>
   );
 }

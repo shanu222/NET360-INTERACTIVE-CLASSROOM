@@ -26,8 +26,14 @@ export class BoardRenderer {
   private viewPage: number | null = null;
   overlay: OverlayFn | null = null;
   onPageView?: (page: number, following: boolean) => void;
+  /** Called after every redraw (the 3D classroom copies the canvases then). */
+  onFrame?: () => void;
 
-  constructor(private host: HTMLElement, private session: BoardSession) {
+  constructor(
+    private host: HTMLElement,
+    private session: BoardSession,
+    private opts: { dpr?: number } = {},
+  ) {
     this.committed = document.createElement('canvas');
     this.live = document.createElement('canvas');
     for (const c of [this.committed, this.live]) {
@@ -89,7 +95,7 @@ export class BoardRenderer {
     const r = this.host.getBoundingClientRect();
     if (!r.width || !r.height) return;
     // Cap at 2× so budget phones keep 60 fps.
-    this.dpr = Math.min(window.devicePixelRatio || 1, 2);
+    this.dpr = this.opts.dpr ?? Math.min(window.devicePixelRatio || 1, 2);
     this.scale = r.width / BOARD_W;
     for (const c of [this.committed, this.live]) {
       c.width = Math.round(r.width * this.dpr);
@@ -124,6 +130,7 @@ export class BoardRenderer {
       for (const s of live) drawStroke(this.lctx, s);
       this.overlay?.(this.lctx);
     }
+    this.onFrame?.();
   }
 
   destroy() {

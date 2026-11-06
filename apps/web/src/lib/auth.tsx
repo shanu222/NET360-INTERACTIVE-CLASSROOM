@@ -62,8 +62,12 @@ export function authMessage(e: unknown): string {
     case 'auth/invalid-api-key':
     case 'auth/api-key-not-valid.-please-pass-a-valid-api-key.':
       return 'The Firebase API key is wrong. Check VITE_FIREBASE_API_KEY on Vercel and redeploy.';
+    case 'auth/user-disabled':
+      return 'This account has been turned off. Please contact your school.';
+    case 'auth/too-many-requests':
+      return 'Too many attempts. Please wait a minute and try again.';
     default:
-      return (e as Error)?.message?.replace(/^Firebase:\s*/, '') || 'Sign-in failed. Try again.';
+      return "We couldn't sign you in. Please try again.";
   }
 }
 

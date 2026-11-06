@@ -1,10 +1,12 @@
 import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { CODE_ALPHABET } from '@net360/protocol';
 import { useAuth } from '../lib/auth.tsx';
 import { api } from '../lib/api.ts';
 import { SignIn } from '../components/SignIn.tsx';
-import { CODE_ALPHABET } from '@net360/protocol';
+import { Lobby } from '../components/Lobby.tsx';
+import { Icon } from '../components/Icons.tsx';
 
 const SUBJECTS = ['Physics', 'Chemistry', 'Mathematics', 'Biology', 'English', 'Computer Science'];
 
@@ -37,23 +39,27 @@ export default function Home() {
   };
 
   return (
-    <div className="lobby">
-      <div className="lobby__glow" />
-      <motion.div className="lobby__card" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}>
-        <header className="lobby__head">
-          <div className="brand">
-            <span className="brand__mark" />
+    <Lobby>
+      <motion.div className="card" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}>
+        <div className="brand">
+          <span className="brand__mark" />
+          <span>
             NET360 <em>Classroom</em>
-          </div>
-          <p className="lobby__lede">The live board of your classroom, on every screen in the room.</p>
-        </header>
+          </span>
+        </div>
+        <h1 className="card__title">{tab === 'join' ? 'Welcome to class' : 'Open your classroom'}</h1>
+        <p className="card__lede">
+          {tab === 'join'
+            ? 'Enter the code on the classroom board, or scan its QR code.'
+            : 'Start a live lesson. Everything you write appears on every screen in the room.'}
+        </p>
 
         <div className="tabs" role="tablist">
           <button role="tab" aria-selected={tab === 'join'} className={tab === 'join' ? 'is-on' : ''} onClick={() => setTab('join')}>
-            Join a class
+            I'm a student
           </button>
           <button role="tab" aria-selected={tab === 'teach'} className={tab === 'teach' ? 'is-on' : ''} onClick={() => setTab('teach')}>
-            Start a class
+            I'm a teacher
           </button>
         </div>
 
@@ -65,23 +71,36 @@ export default function Home() {
                 className="input--code"
                 value={code}
                 onChange={(e) => setCode([...e.target.value.toUpperCase()].filter((c) => CODE_ALPHABET.includes(c)).join('').slice(0, 6))}
-                placeholder="K7P4QX"
+                placeholder="ABC123"
                 inputMode="text"
                 autoCapitalize="characters"
                 autoComplete="off"
+                aria-label="Class code"
               />
             </label>
             <button className="btn btn--primary btn--wide" disabled={code.length !== 6}>
-              Enter classroom
+              Join class
             </button>
             <button type="button" className="btn btn--ghost btn--wide" onClick={() => nav('/join?scan=1')}>
-              Scan the board's QR code
+              <Icon.scan /> Scan QR code
             </button>
           </form>
-        ) : !ready ? null : !user ? (
-          <SignIn prompt="Teachers sign in with their NET360 account." />
+        ) : !ready ? (
+          <div className="card__loading" />
+        ) : !user ? (
+          <SignIn />
         ) : (
           <form className="stack" onSubmit={start}>
+            <div className="who">
+              <span className="avatar">{user.name.slice(0, 1).toUpperCase()}</span>
+              <span className="who__text">
+                <strong>{user.name}</strong>
+                <span>Teacher</span>
+              </span>
+              <button type="button" className="link" onClick={signOut}>
+                Switch account
+              </button>
+            </div>
             <label className="field">
               <span>Subject</span>
               <select value={subject} onChange={(e) => setSubject(e.target.value)}>
@@ -91,22 +110,16 @@ export default function Home() {
               </select>
             </label>
             <label className="field">
-              <span>Topic</span>
+              <span>Today's topic</span>
               <input value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="e.g. Heat and Thermodynamics" maxLength={120} />
             </label>
             <button className="btn btn--primary btn--wide" disabled={busy}>
-              {busy ? 'Opening classroom…' : 'Start class'}
+              {busy ? 'Opening your classroom…' : 'Start class'}
             </button>
             {err && <p className="form-error">{err}</p>}
-            <p className="signin__note">
-              Signed in as {user.name} ·{' '}
-              <button type="button" className="link" onClick={signOut}>
-                switch
-              </button>
-            </p>
           </form>
         )}
       </motion.div>
-    </div>
+    </Lobby>
   );
 }

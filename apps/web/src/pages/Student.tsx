@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { Suspense, useState, type ReactNode } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import type { BoardRenderer } from '@net360/board-engine';
@@ -6,15 +6,16 @@ import { useAuth } from '../lib/auth.tsx';
 import { useClassroom } from '../lib/classroom.ts';
 import { useIdle, usePageInfo } from '../lib/hooks.ts';
 import { saveNotesPdf } from '../lib/notes.ts';
+import { Classroom3D, can3d, prefers3d } from '../lib/webgl.ts';
 import { Environment } from '../components/Environment.tsx';
 import { Board } from '../components/Board.tsx';
 import { SignIn } from '../components/SignIn.tsx';
+import { Lobby } from '../components/Lobby.tsx';
 import { Icon } from '../components/Icons.tsx';
 
 /**
- * The student's classroom: the live board and almost nothing else.
- * One floating control (raise hand), one quiet menu (save notes),
- * and a "Back to live" chip if they browse earlier pages.
+ * The student's classroom: the 3D room with the live board, classmates at
+ * their desks and the teacher at the front — or just the board, one tap away.
  */
 export default function Student() {
   const { sessionId } = useParams();
@@ -28,15 +29,23 @@ export default function Student() {
   const [menu, setMenu] = useState(false);
   const [toast, setToast] = useState('');
   const [hideHint, setHideHint] = useState(false);
+  const [in3d, setIn3d] = useState(prefers3d);
   const entering = Boolean((loc.state as { entering?: boolean } | null)?.entering);
 
   if (ready && !user) {
     return (
-      <div className="lobby">
-        <div className="lobby__card">
+      <Lobby>
+        <div className="card">
+          <div className="brand">
+            <span className="brand__mark" />
+            <span>
+              NET360 <em>Classroom</em>
+            </span>
+          </div>
+          <h1 className="card__title">Take your seat</h1>
           <SignIn prompt="Sign in to enter the classroom." />
         </div>
-      </div>
+      </Lobby>
     );
   }
 
@@ -51,8 +60,40 @@ export default function Student() {
     flash(ok ? 'Notes saved' : 'Nothing written yet');
   };
 
-  return (
-    <Environment variant="full" entering={entering}>
+  // Things that sit on the board, in both the 3D and the flat view.
+  const onBoard: ReactNode = (
+    <>
+      <AnimatePresence>
+        {!pg.following && (
+          <motion.button
+            className="chip chip--live"
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            onClick={() => renderer?.setViewPage(null)}
+          >
+            <span className="live-dot" /> Back to live
+          </motion.button>
+        )}
+      </AnimatePresence>
+      {pg.pages > 1 && (
+        <div className={`pager ${idle ? 'is-idle' : ''}`}>
+          <button aria-label="Previous page" disabled={pg.page === 0} onClick={() => renderer?.setViewPage(pg.page - 1)}>
+            <Icon.left />
+          </button>
+          <span>
+            {pg.page + 1} / {pg.pages}
+          </span>
+          <button aria-label="Next page" disabled={pg.page >= pg.pages - 1} onClick={() => renderer?.setViewPage(pg.page + 1)}>
+            <Icon.right />
+          </button>
+        </div>
+      )}
+    </>
+  );
+
+  const controls = (
+    <>
       <header className={`topline ${idle && !menu ? 'is-idle' : ''}`}>
         <span className="topline__title">
           {info ? (
@@ -65,41 +106,12 @@ export default function Student() {
           )}
         </span>
         <StatusPill status={room.status} />
-      </header>
-
-      <Board board={room.board} onRenderer={setRenderer}>
-        <AnimatePresence>
-          {!pg.following && (
-            <motion.button
-              className="chip chip--live"
-              initial={{ opacity: 0, y: -8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              onClick={() => renderer?.setViewPage(null)}
-            >
-              <span className="live-dot" /> Back to live
-            </motion.button>
-          )}
-        </AnimatePresence>
-        {pg.pages > 1 && (
-          <div className={`pager ${idle ? 'is-idle' : ''}`}>
-            <button aria-label="Previous page" disabled={pg.page === 0} onClick={() => renderer?.setViewPage(pg.page - 1)}>
-              <Icon.left />
-            </button>
-            <span>
-              {pg.page + 1} / {pg.pages}
-            </span>
-            <button aria-label="Next page" disabled={pg.page >= pg.pages - 1} onClick={() => renderer?.setViewPage(pg.page + 1)}>
-              <Icon.right />
-            </button>
-          </div>
+        {can3d() && (
+          <button className="topline__btn" onClick={() => setIn3d((v) => !v)} aria-label={in3d ? 'Show the board only' : 'Show the classroom'} title={in3d ? 'Board only' : 'Classroom view'}>
+            {in3d ? <Icon.board /> : <Icon.cube />}
+          </button>
         )}
-      </Board>
-      {!hideHint && (
-        <button className="rotate-hint" onClick={() => setHideHint(true)}>
-          <Icon.rotate /> Turn your phone sideways for a bigger board
-        </button>
-      )}
+      </header>
 
       <div className="float-actions">
         <div className="more">
@@ -112,6 +124,16 @@ export default function Student() {
                 <button onClick={save}>
                   <Icon.download /> Save notes as PDF
                 </button>
+                {can3d() && (
+                  <button
+                    onClick={() => {
+                      setMenu(false);
+                      setIn3d((v) => !v);
+                    }}
+                  >
+                    {in3d ? <Icon.board /> : <Icon.cube />} {in3d ? 'Board only' : 'Classroom view'}
+                  </button>
+                )}
               </motion.div>
             )}
           </AnimatePresence>
@@ -123,7 +145,7 @@ export default function Student() {
           aria-label={room.hand ? 'Lower hand' : 'Raise hand'}
           onClick={() => {
             room.socket?.emit('hand', !room.hand);
-            if (!room.hand) flash('The teacher can see your hand');
+            if (!room.hand) flash('Your teacher can see your hand');
           }}
         >
           <Icon.hand />
@@ -142,8 +164,8 @@ export default function Student() {
       {(room.status === 'ended' || room.status === 'error') && (
         <div className="veil">
           <div className="veil__card">
-            <h2>{room.status === 'ended' ? 'Class has ended' : 'Could not join'}</h2>
-            <p>{room.status === 'ended' ? 'Your notes from today are ready to keep.' : room.error}</p>
+            <h2>{room.status === 'ended' ? 'Class has ended' : "Couldn't join the class"}</h2>
+            <p>{room.status === 'ended' ? 'Your notes from today are ready to keep.' : friendly(room.error)}</p>
             {room.status === 'ended' && (
               <button className="btn btn--primary btn--wide" onClick={save}>
                 Save notes as PDF
@@ -155,8 +177,58 @@ export default function Student() {
           </div>
         </div>
       )}
+    </>
+  );
+
+  if (in3d) {
+    return (
+      <div className="stage3d">
+        <Suspense fallback={<div className="stage3d__loading" />}>
+          <motion.div
+            className="stage3d__room"
+            initial={entering ? { opacity: 0, scale: 1.08, filter: 'blur(10px)' } : false}
+            animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
+            transition={{ duration: 1.1, ease: [0.22, 1, 0.36, 1] }}
+          >
+            <Classroom3D
+              view="student"
+              board={room.board}
+              people={room.people}
+              teacherName={info?.teacherName ?? null}
+              hideUid={room.welcome?.me.uid}
+              onRenderer={setRenderer}
+            >
+              {onBoard}
+            </Classroom3D>
+          </motion.div>
+        </Suspense>
+        {controls}
+      </div>
+    );
+  }
+
+  return (
+    <Environment variant="full" entering={entering}>
+      <Board board={room.board} onRenderer={setRenderer}>
+        {onBoard}
+      </Board>
+      {!hideHint && (
+        <button className="rotate-hint" onClick={() => setHideHint(true)}>
+          <Icon.rotate /> Turn your phone sideways for a bigger board
+        </button>
+      )}
+      {controls}
     </Environment>
   );
+}
+
+/** Turn server messages into wording students understand. */
+export function friendly(msg: string | null): string {
+  if (!msg) return 'Please try again in a moment.';
+  if (/sign in/i.test(msg)) return 'Please sign in again to rejoin your class.';
+  if (/ended|not exist/i.test(msg)) return 'This class has ended or the code is no longer active.';
+  if (/board link/i.test(msg)) return 'This board link has expired. Open it again from the teacher’s screen.';
+  return 'We lost the connection to your class. Please try again.';
 }
 
 export function StatusPill({ status }: { status: string }) {

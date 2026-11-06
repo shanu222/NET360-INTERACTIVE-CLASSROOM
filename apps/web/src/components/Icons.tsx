@@ -25,6 +25,8 @@ export const Icon = {
   expand: () => (<svg viewBox="0 0 24 24" {...P}><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" /></svg>),
   scan: () => (<svg viewBox="0 0 24 24" {...P}><path d="M4 8V5a1 1 0 011-1h3M16 4h3a1 1 0 011 1v3M20 16v3a1 1 0 01-1 1h-3M8 20H5a1 1 0 01-1-1v-3M4 12h16" /></svg>),
   rotate: () => (<svg viewBox="0 0 24 24" {...P}><rect x="7" y="3" width="10" height="18" rx="2" /><path d="M20 14a8 8 0 01-5 6.5M18 18l-3 2.5 3.5 1" /></svg>),
+  cube: () => (<svg viewBox="0 0 24 24" {...P}><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z" /><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5" /></svg>),
+  board: () => (<svg viewBox="0 0 24 24" {...P}><rect x="3" y="4" width="18" height="12" rx="1.5" /><path d="M7 20l2-4M17 20l-2-4M7 9.5c1.5-2 3-2 4.5 0s3 2 4.5 0" /></svg>),
   check: () => (<svg viewBox="0 0 24 24" {...P}><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>),
   close: () => (<svg viewBox="0 0 24 24" {...P}><path d="M6 6l12 12M18 6L6 18" /></svg>),
 };

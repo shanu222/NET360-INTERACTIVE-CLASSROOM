@@ -9,6 +9,7 @@ import type {
   BoardEvent,
   BoardEventBody,
   ClientToServer,
+  PersonPublic,
   RosterEntry,
   Role,
   ServerToClient,
@@ -159,10 +160,22 @@ function rosterList(s: Session): RosterEntry[] {
   return [...s.roster.values()].map(({ sockets: _s, ...r }) => r);
 }
 
+function peopleList(s: Session): PersonPublic[] {
+  return [...s.roster.values()].filter((r) => r.online).map((r) => ({ uid: r.uid, name: r.name, hand: r.hand, seat: r.seat }));
+}
+
+/** Presence changed: update counts, the teacher's roster and everyone's room. */
 function pushPresence(s: Session) {
   s.cls.present = [...s.roster.values()].filter((r) => r.online).length;
   io.to(room(s)).emit('cls', s.cls);
   io.to(teacherRoom(s)).emit('roster', rosterList(s));
+  io.to(room(s)).emit('people', peopleList(s));
+}
+
+/** A hand went up or down. */
+function pushHands(s: Session) {
+  io.to(teacherRoom(s)).emit('roster', rosterList(s));
+  io.to(room(s)).emit('people', peopleList(s));
 }
 
 interface SocketData {
@@ -213,7 +226,7 @@ io.on('connection', (socket: Socket<ClientToServer, ServerToClient>) => {
       r.online = true;
       r.sockets++;
     } else {
-      s.roster.set(uid, { uid, name, online: true, hand: false, joinedAt: Date.now(), sockets: 1 });
+      s.roster.set(uid, { uid, name, online: true, hand: false, joinedAt: Date.now(), seat: s.roster.size, sockets: 1 });
     }
   }
   if (role !== 'board') persist.joined(s, uid, name, role);
@@ -247,7 +260,7 @@ io.on('connection', (socket: Socket<ClientToServer, ServerToClient>) => {
     r.hand = Boolean(up);
     r.handAt = r.hand ? Date.now() : undefined;
     io.to(userRoom(s, uid)).emit('hand', r.hand);
-    io.to(teacherRoom(s)).emit('roster', rosterList(s));
+    pushHands(s);
   });
 
   socket.on('lower', (who) => {
@@ -258,7 +271,7 @@ io.on('connection', (socket: Socket<ClientToServer, ServerToClient>) => {
     r.hand = false;
     r.handAt = undefined;
     io.to(userRoom(s, r.uid)).emit('hand', false);
-    io.to(teacherRoom(s)).emit('roster', rosterList(s));
+    pushHands(s);
   });
 
   socket.on('cls', (patch) => {

@@ -859,3 +859,170 @@ svg { display: block; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition-duration: 0.01ms !important; }
 }
+
+/* =====================================================================
+   3D classroom
+   ===================================================================== */
+.room3d { position: absolute; inset: 0; overflow: hidden; background: #2a2119; }
+.room3d canvas { touch-action: none; }
+.room3d__board { position: absolute; pointer-events: none; z-index: 2; }
+.room3d__board > * { pointer-events: auto; }
+.stage3d { position: fixed; inset: 0; background: #2a2119; overflow: hidden; }
+.stage3d__room { position: absolute; inset: 0; }
+.stage3d__loading {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(60% 50% at 50% 35%, rgba(255, 236, 200, 0.25), transparent 70%),
+    linear-gradient(180deg, #d9ccb5 0%, #c8b89c 62%, #7a5a3d 62%, #5e432c 100%);
+  animation: breathe 2.4s ease-in-out infinite;
+}
+@keyframes breathe { 50% { opacity: 0.85; } }
+.stage3d .topline { position: fixed; }
+.topline__btn {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  margin-left: -4px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(245, 239, 228, 0.12);
+  color: var(--ivory);
+}
+.topline__btn svg { width: 17px; height: 17px; }
+.stage3d--display .display-title {
+  top: 2.6vh;
+  padding: 0.5em 1.1em 0.55em;
+  border-radius: 99px;
+  background: rgba(250, 246, 238, 0.82);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 10px 30px -12px rgba(40, 25, 10, 0.45);
+}
+.stage3d--display .display-title__subject { font-size: clamp(20px, 1.9vw, 40px); }
+.stage3d--display .display-title__topic { font-size: clamp(15px, 1.25vw, 26px); }
+
+/* Teacher's view of the class */
+.panel--class { width: min(440px, calc(100vw - 200px)); justify-items: stretch; }
+.panel--class .panel__label { justify-self: start; }
+.classview {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #2a2119;
+}
+.classview__empty {
+  position: absolute;
+  left: 50%;
+  bottom: 10px;
+  translate: -50% 0;
+  margin: 0;
+  padding: 6px 12px;
+  border-radius: 99px;
+  background: rgba(22, 18, 14, 0.75);
+  color: var(--ivory);
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+
+/* =====================================================================
+   Lobby: sign-in and join, over the room
+   ===================================================================== */
+.lobby { padding: 0; }
+.lobby__room { position: fixed; inset: 0; }
+.lobby__scrim {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(70% 70% at 50% 50%, rgba(20, 15, 10, 0.15), rgba(20, 15, 10, 0.55)),
+    linear-gradient(180deg, rgba(20, 15, 10, 0.1), rgba(20, 15, 10, 0.35));
+}
+.lobby__content {
+  position: relative;
+  z-index: 2;
+  min-height: 100%;
+  display: grid;
+  place-items: center;
+  padding: max(20px, env(safe-area-inset-top)) 16px max(20px, env(safe-area-inset-bottom));
+}
+.card {
+  width: min(430px, 100%);
+  display: grid;
+  gap: 0;
+  padding: 30px 30px 26px;
+  border-radius: 26px;
+  background: rgba(250, 246, 238, 0.93);
+  backdrop-filter: blur(22px) saturate(1.2);
+  border: 1px solid rgba(255, 255, 255, 0.65);
+  box-shadow: 0 50px 100px -30px rgba(10, 6, 2, 0.75), 0 2px 0 rgba(255, 255, 255, 0.5) inset;
+}
+.card .brand { font-size: 17px; margin-bottom: 22px; }
+.card__title {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: 30px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+.card__lede { margin: 8px 0 22px; color: var(--ink-soft); font-size: 15px; line-height: 1.5; }
+.card .tabs { margin-bottom: 18px; }
+.card .stack > .card__title + .card__lede { margin-bottom: 8px; }
+.card__loading {
+  height: 48px;
+  border-radius: 12px;
+  background: linear-gradient(90deg, var(--ivory-2), #f7f1e6, var(--ivory-2));
+  background-size: 200% 100%;
+  animation: shimmer 1.4s linear infinite;
+}
+@keyframes shimmer { to { background-position: -200% 0; } }
+.btn--google {
+  gap: 12px;
+  background: #fff;
+  color: #1f1f1f;
+  border: 1px solid rgba(42, 33, 25, 0.16);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+.btn--google:hover:not(:disabled) { background: #faf8f5; border-color: rgba(42, 33, 25, 0.3); }
+.signin__note { margin: 2px 0 0; text-align: center; font-size: 12.5px; color: var(--ink-soft); }
+.avatar {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--slate);
+  color: var(--amber);
+  font-family: var(--serif);
+  font-weight: 600;
+  font-size: 18px;
+}
+.avatar--sm { width: 36px; height: 36px; font-size: 16px; }
+.who { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 14px; background: var(--ivory-2); }
+.who__text { display: grid; flex: 1; min-width: 0; line-height: 1.3; }
+.who__text strong { font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.who__text span { font-size: 12.5px; color: var(--ink-soft); }
+.who .link { font-size: 13px; }
+
+.classcard { gap: 4px; }
+.pill--live-light { background: rgba(229, 72, 77, 0.1); color: #b4382f; height: 28px; padding: 0 12px; letter-spacing: 0.08em; text-transform: uppercase; font-size: 11.5px; }
+.classcard__subject { margin: 14px 0 0; font-size: 42px; }
+.classcard__topic { font-size: 19px; text-transform: none; }
+.classcard__teacher {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 18px 0 22px;
+  padding: 10px 16px 10px 10px;
+  border-radius: 99px;
+  background: var(--ivory-2);
+  text-align: left;
+}
+.classcard__teacher span:last-child { display: grid; line-height: 1.3; }
+.classcard__teacher strong { font-size: 14.5px; }
+.classcard__teacher small { font-size: 12.5px; color: var(--ink-soft); }
+.scan__view { position: relative; margin-top: 16px; }
+.scan__view .scan__frame { margin: 18%; }

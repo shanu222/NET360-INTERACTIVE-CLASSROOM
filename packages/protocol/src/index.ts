@@ -211,9 +211,19 @@ export interface RosterEntry {
   /** When the hand went up, for queue order. */
   handAt?: number;
   joinedAt: number;
+  seat: number;
 }
 
 export interface Me { uid: string; name: string; clientId: string }
+
+/** What every screen knows about the people in class (for the 3D room). */
+export interface PersonPublic {
+  uid: string;
+  name: string;
+  hand: boolean;
+  /** Stable seat number, in join order. */
+  seat: number;
+}
 
 export interface Welcome {
   role: Role;
@@ -237,6 +247,8 @@ export interface ServerToClient {
   cls: (c: ClassState) => void;
   /** Teacher only. */
   roster: (r: RosterEntry[]) => void;
+  /** Everyone: who is in the room right now. */
+  people: (p: PersonPublic[]) => void;
   /** Student only: their own hand state. */
   hand: (up: boolean) => void;
   ended: () => void;

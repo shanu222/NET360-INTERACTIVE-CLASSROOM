@@ -7,6 +7,7 @@ import { api } from '../lib/api.ts';
 import { useAuth } from '../lib/auth.tsx';
 import { SignIn } from '../components/SignIn.tsx';
 import { Icon } from '../components/Icons.tsx';
+import { Lobby } from '../components/Lobby.tsx';
 
 /** Pull a class code from a scanned join URL or a typed code. */
 function codeFrom(text: string): string | null {
@@ -35,7 +36,7 @@ export default function Join() {
   useEffect(() => {
     if (code.length !== 6) return setFound(null);
     setErr('');
-    api.lookup(code).then(setFound).catch((e) => setErr(e.message));
+    api.lookup(code).then(setFound).catch(() => setErr('No live class has this code. Check the board and try again.'));
   }, [code]);
 
   // QR scanning with the device camera.
@@ -57,7 +58,7 @@ export default function Join() {
         { preferredCamera: 'environment', highlightScanRegion: false, returnDetailedScanResult: true },
       );
       scanner.start().catch(() => {
-        setErr('Camera unavailable — type the code shown on the board instead.');
+        setErr('The camera is not available. Please type the code shown on the board.');
         setScanning(false);
       });
     });
@@ -74,49 +75,63 @@ export default function Join() {
     setTimeout(() => nav(`/class/${found.session.id}`, { state: { entering: true } }), 520);
   };
 
+  const n = found?.present ?? 0;
   return (
-    <div className="lobby">
-      <div className="lobby__glow" />
+    <Lobby>
       <AnimatePresence mode="wait">
         {!entering && (
           <motion.div
             key="card"
-            className="lobby__card"
-            initial={{ opacity: 0, y: 16 }}
+            className="card"
+            initial={{ opacity: 0, y: 18 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 1.06, filter: 'blur(6px)' }}
-            transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+            exit={{ opacity: 0, scale: 1.05, filter: 'blur(6px)' }}
+            transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
           >
-            <div className="brand brand--small">
+            <div className="brand">
               <span className="brand__mark" />
-              NET360 <em>Classroom</em>
+              <span>
+                NET360 <em>Classroom</em>
+              </span>
             </div>
 
             {scanning ? (
               <div className="scan">
-                <video ref={video} className="scan__video" muted playsInline />
-                <div className="scan__frame" />
-                <p className="scan__hint">Point your camera at the QR code on the classroom board</p>
+                <h1 className="card__title">Scan the board</h1>
+                <div className="scan__view">
+                  <video ref={video} className="scan__video" muted playsInline />
+                  <div className="scan__frame" />
+                </div>
+                <p className="card__lede">Point your camera at the QR code on the classroom board.</p>
                 <button className="btn btn--ghost btn--wide" onClick={() => setScanning(false)}>
                   Type the code instead
                 </button>
               </div>
             ) : found ? (
               <div className="classcard">
-                <p className="classcard__eyebrow">
+                <span className="pill pill--live-light">
                   <span className="live-dot" /> Live now
-                </p>
+                </span>
                 <h1 className="classcard__subject">{found.session.subject}</h1>
                 {found.session.topic && <p className="classcard__topic">{found.session.topic}</p>}
-                <p className="classcard__meta">
-                  with {found.session.teacherName} · {found.present} {found.present === 1 ? 'student' : 'students'} inside
-                </p>
-                {!ready ? null : user ? (
-                  <button className="btn btn--primary btn--wide" onClick={enter} autoFocus>
-                    Enter classroom
-                  </button>
+                <div className="classcard__teacher">
+                  <span className="avatar avatar--sm">{found.session.teacherName.slice(0, 1).toUpperCase()}</span>
+                  <span>
+                    <strong>{found.session.teacherName}</strong>
+                    <small>{n === 0 ? 'Be the first to join' : `${n} ${n === 1 ? 'student is' : 'students are'} in class`}</small>
+                  </span>
+                </div>
+                {!ready ? (
+                  <div className="card__loading" />
+                ) : user ? (
+                  <>
+                    <button className="btn btn--primary btn--wide" onClick={enter} autoFocus>
+                      Enter classroom
+                    </button>
+                    <p className="signin__note">Joining as {user.name}</p>
+                  </>
                 ) : (
-                  <SignIn prompt="Sign in to enter the classroom." />
+                  <SignIn prompt="Sign in to take your seat." />
                 )}
                 <button className="link" onClick={() => setCode('')}>
                   Not this class?
@@ -124,16 +139,19 @@ export default function Join() {
               </div>
             ) : (
               <div className="stack">
+                <h1 className="card__title">Join your class</h1>
+                <p className="card__lede">Enter the six-character code shown on the classroom board.</p>
                 <label className="field">
-                  <span>Class code on the board</span>
+                  <span>Class code</span>
                   <input
                     className="input--code"
                     value={code}
                     onChange={(e) => setCode([...e.target.value.toUpperCase()].filter((c) => CODE_ALPHABET.includes(c)).join('').slice(0, 6))}
-                    placeholder="K7P4QX"
+                    placeholder="ABC123"
                     autoFocus
                     autoComplete="off"
                     autoCapitalize="characters"
+                    aria-label="Class code"
                   />
                 </label>
                 {err && <p className="form-error">{err}</p>}
@@ -145,6 +163,6 @@ export default function Join() {
           </motion.div>
         )}
       </AnimatePresence>
-    </div>
+    </Lobby>
   );
 }

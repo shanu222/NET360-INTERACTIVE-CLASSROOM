@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { INK, PenInput, type BoardRenderer, type PenSettings } from '@net360/board-engine';
@@ -13,7 +13,9 @@ import { PenDock } from '../components/PenDock.tsx';
 import { SignIn } from '../components/SignIn.tsx';
 import { Code, QR } from '../components/QR.tsx';
 import { Icon } from '../components/Icons.tsx';
-import { StatusPill } from './Student.tsx';
+import { StatusPill, friendly } from './Student.tsx';
+import { Classroom3D, can3d } from '../lib/webgl.ts';
+import { Lobby } from '../components/Lobby.tsx';
 
 const KEY_TOOLS: Record<string, PenSettings['tool']> = { p: 'pen', h: 'highlighter', e: 'eraser', l: 'line', a: 'arrow', r: 'rect', c: 'circle' };
 const KEY_COLORS = [INK.chalk, INK.amber, INK.sky, INK.mint, INK.coral];
@@ -37,7 +39,7 @@ export default function Teacher() {
   const [input, setInput] = useState<PenInput | null>(null);
   const [hist, setHist] = useState({ undo: false, redo: false });
   const [writing, setWriting] = useState(false);
-  const [panel, setPanel] = useState<'join' | 'hands' | null>(null);
+  const [panel, setPanel] = useState<'join' | 'class' | null>(null);
   const [copied, setCopied] = useState(false);
   const [confirmEnd, setConfirmEnd] = useState(false);
 
@@ -115,11 +117,18 @@ export default function Teacher() {
 
   if (ready && !user) {
     return (
-      <div className="lobby">
-        <div className="lobby__card">
-          <SignIn prompt="Sign in to open your classroom." />
+      <Lobby>
+        <div className="card">
+          <div className="brand">
+            <span className="brand__mark" />
+            <span>
+              NET360 <em>Classroom</em>
+            </span>
+          </div>
+          <h1 className="card__title">Open your classroom</h1>
+          <SignIn prompt="Sign in with your teacher account." />
         </div>
-      </div>
+      </Lobby>
     );
   }
 
@@ -204,12 +213,12 @@ export default function Teacher() {
             <Icon.qr />
             <span>Join</span>
           </button>
-          <button className={`rail__btn ${panel === 'hands' ? 'is-on' : ''}`} onClick={() => setPanel(panel === 'hands' ? null : 'hands')} title="Raised hands">
+          <button className={`rail__btn ${panel === 'class' ? 'is-on' : ''}`} onClick={() => setPanel(panel === 'class' ? null : 'class')} title="Your class">
             <span className={`rail__hand ${hands.length ? 'is-up' : ''}`}>
-              <Icon.hand />
+              <Icon.users />
               {hands.length > 0 && <b>{hands.length}</b>}
             </span>
-            <span>Hands</span>
+            <span>Class</span>
           </button>
           <button className="rail__btn" onClick={openBoard} disabled={!boardKey} title="Open the classroom board display">
             <Icon.display />
@@ -228,8 +237,16 @@ export default function Teacher() {
                 </label>
               </motion.div>
             )}
-            {panel === 'hands' && (
-              <motion.div className="panel" initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 12 }}>
+            {panel === 'class' && (
+              <motion.div className="panel panel--class" initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 12 }}>
+                {can3d() && (
+                  <div className="classview">
+                    <Suspense fallback={null}>
+                      <Classroom3D view="classview" people={room.people} teacherName={null} showNames />
+                    </Suspense>
+                    {room.people.length === 0 && <p className="classview__empty">Students appear at their desks as they join</p>}
+                  </div>
+                )}
                 <p className="panel__label">Raised hands</p>
                 {hands.length === 0 ? (
                   <p className="muted small">No hands up right now.</p>
@@ -268,7 +285,7 @@ export default function Teacher() {
                 ? 'Save the notes before you leave.'
                 : notTeacher
                   ? 'Only the teacher who started this class can write on its board.'
-                  : room.error}
+                  : friendly(room.error)}
             </p>
             {room.status === 'ended' && (
               <button className="btn btn--primary btn--wide" onClick={() => saveNotesPdf(room.board.state, info)}>
