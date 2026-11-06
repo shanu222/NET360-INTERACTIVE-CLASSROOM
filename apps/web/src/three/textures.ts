@@ -25,6 +25,28 @@ function tex(c: HTMLCanvasElement, repeat?: [number, number]): CanvasTexture {
   return t;
 }
 
+/**
+ * Painting a texture is slow (thousands of brush strokes), so each one is painted
+ * once per page and reused: the join screen's room and the classroom share them.
+ * Callers get their own copy (sharing the painted canvas) so disposing a scene
+ * never breaks another.
+ */
+const painted = new Map<string, Texture>();
+export function reuse<A extends unknown[]>(name: string, paint: (...a: A) => Texture, ...args: A): Texture {
+  const key = `${name}:${JSON.stringify(args)}`;
+  let t = painted.get(key);
+  if (!t) {
+    t = paint(...args);
+    painted.set(key, t);
+  }
+  const copy = t.clone();
+  copy.needsUpdate = true;
+  return copy;
+}
+export function isPainted(name: string, ...args: unknown[]) {
+  return painted.has(`${name}:${JSON.stringify(args)}`);
+}
+
 /** Seeded random so every screen paints the same room. */
 function rng(seed: number) {
   let s = seed >>> 0;

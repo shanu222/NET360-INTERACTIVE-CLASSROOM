@@ -19,7 +19,54 @@ import {
   Vector3,
   type Texture,
 } from 'three';
-import * as T from './textures.ts';
+import * as Paint from './textures.ts';
+
+/** Room artwork, painted once and reused (see `reuse` in textures.ts). */
+const REUSED = new Set([
+  'plaster', 'floorPlanks', 'oak', 'windowSky', 'plateMaxwell', 'plateSpiral', 'plateEuler', 'plateLens',
+  'paintingLandscape', 'paintingOrbits', 'paintingSea', 'paintingNight', 'paintingPlanet', 'paintingBlooms',
+  'paintingBalloons', 'paintingRainbow', 'inscription', 'quotePlate', 'clockFace',
+]);
+const T = new Proxy({ ...Paint }, {
+  get(target, prop: string) {
+    const v = (target as Record<string, unknown>)[prop];
+    if (typeof v === 'function' && REUSED.has(prop)) {
+      return (...a: unknown[]) => Paint.reuse(prop, v as (...x: unknown[]) => Texture, ...a);
+    }
+    return v;
+  },
+}) as typeof Paint;
+
+const QUOTES: [string, string, string][] = [
+  ['If I have seen further, it is by standing on the shoulders of giants.', 'Isaac Newton', 'Letter to Robert Hooke, 1675'],
+  ['Nothing in life is to be feared, it is only to be understood.', 'Marie Curie', 'Physicist and chemist, Nobel 1903 & 1911'],
+  ['Imagination is more important than knowledge.', 'Albert Einstein', 'Interview, 1929'],
+  ['Measure what is measurable, and make measurable what is not so.', 'Galileo Galilei', 'Attributed'],
+];
+const INSCRIPTION = ['The important thing is not to stop questioning.', 'Albert Einstein'] as const;
+
+/**
+ * Paint all the room's artwork ahead of time, one piece per idle moment, so the
+ * page keeps responding to taps and typing while the classroom gets ready.
+ */
+export async function prepareRoomArt(): Promise<void> {
+  const jobs: (() => unknown)[] = [
+    () => T.plaster('#efe6d6'), () => T.floorPlanks(), () => T.oak('#8f6b48', [6, 1]), () => T.windowSky(),
+    () => T.oak('#4a3423'), () => T.oak('#8a643f'), () => T.oak('#6b4a30'),
+    () => T.plateMaxwell(), () => T.plateSpiral(), () => T.plateEuler(), () => T.plateLens(),
+    () => T.paintingLandscape(), () => T.paintingOrbits(), () => T.paintingSea(), () => T.paintingNight(),
+    () => T.paintingPlanet(), () => T.paintingBlooms(), () => T.paintingBalloons(), () => T.paintingRainbow(),
+    () => T.inscription(...INSCRIPTION), ...QUOTES.map((q) => () => T.quotePlate(...q)), () => T.clockFace(),
+  ];
+  const idle = () =>
+    new Promise<void>((r) =>
+      'requestIdleCallback' in window ? window.requestIdleCallback(() => r(), { timeout: 120 }) : setTimeout(r, 0),
+    );
+  for (const job of jobs) {
+    await idle();
+    job();
+  }
+}
 
 /**
  * The classroom, in metres. Front wall (with the board) at z = 0, students face −z.
@@ -209,20 +256,16 @@ export function buildRoom(opts: { shadows: boolean }): Room {
   // An inscription across the top of the back wall.
   const words = new Mesh(
     new PlaneGeometry(7.6, 0.82),
-    new MeshBasicMaterial({ map: T.inscription('The important thing is not to stop questioning.', 'Albert Einstein'), transparent: true }),
+    new MeshBasicMaterial({ map: T.inscription(...INSCRIPTION), transparent: true }),
   );
   words.position.set(0, 3.98, D - 0.02);
   words.rotation.y = Math.PI;
   g.add(words);
 
   /* ---------- quotations from scientists, between the windows and the paintings ---------- */
-  const quotes: [string, string, string, number, number][] = [
-    // [quote, author, note, wall x, z]
-    ['If I have seen further, it is by standing on the shoulders of giants.', 'Isaac Newton', 'Letter to Robert Hooke, 1675', -W / 2 + 0.03, 5.8],
-    ['Nothing in life is to be feared, it is only to be understood.', 'Marie Curie', 'Physicist and chemist, Nobel 1903 & 1911', -W / 2 + 0.03, 10.2],
-    ['Imagination is more important than knowledge.', 'Albert Einstein', 'Interview, 1929', W / 2 - 0.03, 6.95],
-    ['Measure what is measurable, and make measurable what is not so.', 'Galileo Galilei', 'Attributed', W / 2 - 0.03, 11.55],
-  ];
+  // [quote, author, note] with where each hangs: [wall x, z]
+  const spots: [number, number][] = [[-W / 2 + 0.03, 5.8], [-W / 2 + 0.03, 10.2], [W / 2 - 0.03, 6.95], [W / 2 - 0.03, 11.55]];
+  const quotes = QUOTES.map(([q, a, n], i) => [q, a, n, spots[i][0], spots[i][1]] as const);
   for (const [q, a, n, x, z] of quotes) {
     const f = framed(T.quotePlate(q, a, n), 1.6, 1.1, '#2a2119', false, 0.4);
     f.position.set(x, 2.55, z);

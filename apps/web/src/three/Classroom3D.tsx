@@ -3,6 +3,7 @@ import { BoardRenderer, PenInput, type BoardSession, type PenSettings } from '@n
 import { BOARD_TEX, ClassroomScene, type Rect, type View } from './scene.ts';
 import type { PersonInRoom } from './people.ts';
 import { fontsReady } from './textures.ts';
+import { prepareRoomArt } from './room.ts';
 
 export interface ZoomCommand {
   /** 0 = from the desk, 1 = the board fills the screen. */
@@ -66,7 +67,9 @@ export default function Classroom3D({
     // Let the classroom's fonts arrive first, so the quotes and prints are set in them.
     let sc: ClassroomScene | null = null;
     let cancelled = false;
-    void fontsReady().then(() => {
+    void fontsReady()
+      .then(() => prepareRoomArt())
+      .then(() => {
       if (cancelled || !hostRef.current) return;
       sc = new ClassroomScene(hostRef.current, view);
       sc.onBoardRect = setRect;

@@ -502,7 +502,7 @@ export default function Teacher() {
                 ? 'Save the notes before you leave.'
                 : notTeacher
                   ? 'Only the teacher who started this class can write on its board.'
-                  : friendly(room.error)}
+                  : friendly(room.error, 'teacher')}
             </p>
             {room.status === 'ended' && (
               <button className="btn btn--primary btn--wide" onClick={() => saveNotesPdf(room.board.state, info)}>

@@ -114,6 +114,7 @@ async function main() {
   for (let k = 0; k < 8; k++) draw(teacher, k);
   teacher.board.local({ t: 'h', ids: ['r3'] }); // an undo
   students[0].sock.emit('hand', true);
+  students[1].sock.emit('chat', { text: 'Message before the restart' });
   await sleep(600);
   const before = fp(teacher.board.state);
   const seqBefore = teacher.board.state.seq;
@@ -126,6 +127,13 @@ async function main() {
   await sleep(3000); // clients reconnect on their own
 
   const restored = everyone.filter((c) => fp(c.board.state) === before).length;
+  const history: { text: string }[][] = [];
+  const t2 = connect('teacher2', { sessionId: session.id, dev: devT });
+  t2.sock.on('chatHistory', (h: { text: string }[]) => history.push(h));
+  await sleep(1200);
+  const chatBack = Boolean(history.at(-1)?.some((m) => m.text === 'Message before the restart'));
+  console.log(`Messages after restart: ${chatBack ? 'restored' : 'MISSING'}`);
+  t2.sock.disconnect();
   const newEpoch = everyone.every((c) => c.epochs.size === 2);
   console.log(`\nAfter restart: ${restored}/${everyone.length} screens have the full board back (seq ${seqBefore}), new epoch seen by all: ${newEpoch}`);
 
@@ -143,7 +151,7 @@ async function main() {
   console.log(`Board saved in ${String(snap[0]?.location).toUpperCase()}: ${snap[0]?.strokes} strokes, ${snap[0]?.bytes} bytes`);
 
   const ok =
-    restored === everyone.length && newEpoch && synced === everyone.length &&
+    restored === everyone.length && newEpoch && synced === everyone.length && chatBack &&
     people[0]?.n === 11 && hands[0]?.n === 1 && snap[0]?.location === 'r2';
   console.log(ok ? '\nPASS' : '\nFAIL');
   everyone.forEach((c) => c.sock.disconnect());

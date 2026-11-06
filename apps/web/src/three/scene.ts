@@ -116,6 +116,9 @@ export class ClassroomScene {
     this.renderer.toneMappingExposure = 1.18;
     this.renderer.shadowMap.enabled = !small && !light;
     this.renderer.shadowMap.type = PCFSoftShadowMap;
+    // Checking every shader for errors makes the browser wait for each one to compile,
+    // which freezes the page for a moment. Only do it while developing.
+    this.renderer.debug.checkShaderErrors = import.meta.env.DEV;
     Object.assign(this.renderer.domElement.style, { position: 'absolute', inset: '0', width: '100%', height: '100%', display: 'block' });
     host.appendChild(this.renderer.domElement);
 
@@ -166,7 +169,15 @@ export class ClassroomScene {
       this.room.tickClock();
       this.invalidate();
     }, 30_000);
-    this.renderer.setAnimationLoop(() => this.frame());
+    if (view === 'lobby') {
+      for (const ev of ['pointerdown', 'keydown', 'input'] as const) window.addEventListener(ev, this.onInput, { capture: true, passive: true });
+    }
+    // Compile the room's shaders in the background (where the browser supports it),
+    // then start drawing — the page stays responsive meanwhile.
+    const start = () => {
+      if (!this.disposed) this.renderer.setAnimationLoop(() => this.frame());
+    };
+    this.renderer.compileAsync(this.scene, this.camera).then(start, start);
 
     // Repaint the welcome board once the web fonts arrive.
     if (view === 'lobby') {
@@ -532,8 +543,22 @@ export class ClassroomScene {
     this.dirty = true;
   }
 
+  /** Lobby: when the person last typed or tapped (the background yields to them). */
+  private lastInput = 0;
+  private lastLobbyFrame = 0;
+  private onInput = () => {
+    this.lastInput = performance.now();
+  };
+
   private frame() {
     const lobby = this.view === 'lobby' && !this.reduceMotion;
+    if (this.view === 'lobby') {
+      // The drifting background is decoration: pause it while someone types or taps,
+      // and draw it at 30 frames a second, so the join card always responds instantly.
+      const now = performance.now();
+      if (now - this.lastInput < 450 || now - this.lastLobbyFrame < 32) return;
+      this.lastLobbyFrame = now;
+    }
     let zooming = false;
     if (this.view === 'student' && Math.abs(this.zoomTarget - this.zoomCur) > 0.0005) {
       this.zoomCur += (this.zoomTarget - this.zoomCur) * (this.reduceMotion ? 1 : 0.14);
@@ -625,7 +650,11 @@ export class ClassroomScene {
     }
   }
 
+  private disposed = false;
+
   dispose() {
+    this.disposed = true;
+    for (const ev of ['pointerdown', 'keydown', 'input'] as const) window.removeEventListener(ev, this.onInput, { capture: true });
     this.renderer.setAnimationLoop(null);
     window.removeEventListener('pointermove', this.onPointer);
     const el = this.renderer.domElement;

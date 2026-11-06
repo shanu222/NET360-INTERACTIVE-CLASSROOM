@@ -251,6 +251,11 @@ export default function Student() {
                 Save notes as PDF
               </button>
             )}
+            {room.status === 'error' && /sign in|lost the connection/i.test(friendly(room.error) + (room.error ?? '')) && (
+              <button className="btn btn--primary btn--wide" onClick={() => window.location.reload()}>
+                Try again
+              </button>
+            )}
             <button className="btn btn--ghost btn--wide" onClick={() => nav(room.status === 'error' ? '/join' : '/')}>
               {room.status === 'error' ? 'Join again' : 'Leave'}
             </button>
@@ -266,8 +271,8 @@ export default function Student() {
         <Suspense fallback={<div className="stage3d__loading" />}>
           <motion.div
             className="stage3d__room"
-            initial={entering ? { opacity: 0, scale: 1.08, filter: 'blur(10px)' } : false}
-            animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
+            initial={entering ? { opacity: 0, scale: 1.08 } : false}
+            animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 1.1, ease: [0.22, 1, 0.36, 1] }}
           >
             <Classroom3D
@@ -315,11 +320,12 @@ export default function Student() {
 }
 
 /** Turn server messages into wording students understand. */
-export function friendly(msg: string | null): string {
+export function friendly(msg: string | null, who: 'student' | 'teacher' = 'student'): string {
   if (!msg) return 'Please try again in a moment.';
   if (/wrong class code|class code/i.test(msg)) return 'That code doesn’t match this class. Use the code your teacher shared.';
   if (/your name|join again/i.test(msg)) return 'Please enter your name and the class code again.';
-  if (/sign in/i.test(msg)) return 'Please sign in again to rejoin your class.';
+  // Students never sign in; this only appears while the classroom server is updating.
+  if (/sign in/i.test(msg)) return who === 'teacher' ? 'Please sign in again to open your class.' : 'Your classroom is getting ready. Please try again in a moment.';
   if (/ended|not exist/i.test(msg)) return 'This class has ended or the code is no longer active.';
   if (/board link/i.test(msg)) return 'This board link has expired. Open it again from the teacher’s screen.';
   return 'We lost the connection to your class. Please try again.';

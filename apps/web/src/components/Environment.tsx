@@ -29,8 +29,8 @@ export function Environment({ children, variant = 'full', entering = false }: { 
       </div>
       <motion.main
         className="room__stage"
-        initial={entering ? { scale: 0.82, opacity: 0, filter: 'blur(8px)' } : false}
-        animate={{ scale: 1, opacity: 1, filter: 'blur(0px)' }}
+        initial={entering ? { scale: 0.82, opacity: 0 } : false}
+        animate={{ scale: 1, opacity: 1 }}
         transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1] }}
       >
         {children}

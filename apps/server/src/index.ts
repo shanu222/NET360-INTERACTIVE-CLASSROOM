@@ -55,7 +55,12 @@ app.get('/api/config', (_req, res) => {
   res.json({ authMode, media: mediaEnabled });
 });
 
-app.get('/api/health', (_req, res) => res.json({ ok: true, epoch, db: dbEnabled, r2: r2Enabled, auth: authMode }));
+/** What this server can do — lets you confirm a deploy picked up the latest code. */
+const VERSION = (process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.SOURCE_VERSION ?? 'local').slice(0, 7);
+const FEATURES = ['name-code-join', 'live-chat', 'read-receipts'];
+app.get('/api/health', (_req, res) =>
+  res.json({ ok: true, version: VERSION, features: FEATURES, epoch, db: dbEnabled, r2: r2Enabled, auth: authMode }),
+);
 
 /** Who is signed in, and whether they may start classes. */
 app.get('/api/me', async (req, res) => {
@@ -429,7 +434,7 @@ async function start() {
   }
   http.listen(config.port, '0.0.0.0', () => {
     console.log(
-      `NET360 Classroom server on :${config.port} — auth: ${authMode}, database: ${dbEnabled ? 'Cloudflare D1' : 'memory only'}${r2Enabled ? ' + R2' : ''}, video: ${mediaEnabled ? 'on' : 'off'}`,
+      `[version ${VERSION}] NET360 Classroom server on :${config.port} — auth: ${authMode}, database: ${dbEnabled ? 'Cloudflare D1' : 'memory only'}${r2Enabled ? ' + R2' : ''}, video: ${mediaEnabled ? 'on' : 'off'}`,
     );
   });
 }

@@ -188,7 +188,7 @@ export async function restoreLiveSessions(): Promise<number> {
     } catch (e) {
       console.error(`[db] could not read snapshot for ${r.code}:`, (e as Error).message);
     }
-    store.adopt(
+    const restored = store.adopt(
       {
         info: { id: r.id, code: r.code, subject: r.subject, topic: r.topic, teacherName: r.teacher_name, startedAt: r.started_at },
         teacherUid: r.teacher_uid,
@@ -196,6 +196,16 @@ export async function restoreLiveSessions(): Promise<number> {
       },
       board,
     );
+    // Bring the class's private messages back too.
+    try {
+      const msgs = await query<{ id: string; from_uid: string; from_name: string; to_uid: string; text: string; at: number }>(
+        `SELECT id, from_uid, from_name, to_uid, text, at FROM chat_messages WHERE session_id = ? ORDER BY at DESC LIMIT 2500`,
+        [r.id],
+      );
+      restored.chats = msgs.reverse().map((m) => ({ id: m.id, from: m.from_uid, fromName: m.from_name, to: m.to_uid, text: m.text, at: m.at }));
+    } catch (e) {
+      console.error(`[db] could not read messages for ${r.code}:`, (e as Error).message);
+    }
   }
   return rows.length;
 }
