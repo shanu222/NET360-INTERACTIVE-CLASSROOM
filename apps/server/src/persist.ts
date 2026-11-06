@@ -1,25 +1,26 @@
 import { gunzipSync, gzipSync } from 'node:zlib';
 import type { BoardState } from '@net360/protocol';
-import { config, dbEnabled } from './config.ts';
+import { config, dbEnabled, r2Enabled } from './config.ts';
 import { query, write } from './db.ts';
+import { boardKey, getObject, putObject } from './storage.ts';
 import { store, type Session } from './store.ts';
 
 /** D1 stores values up to 2 MB; stay safely under it. */
 const MAX_SNAPSHOT_BYTES = 1_900_000;
 
-/** Board → gzip → base64. Points are rounded to 0.01 board units (well below a pixel). */
-export function encodeBoard(b: BoardState): string {
+/** Board → gzip JSON. Points are rounded to 0.01 board units (well below a pixel). */
+export function encodeBoard(b: BoardState): Buffer {
   const slim: BoardState = {
     ...b,
     strokes: Object.fromEntries(
       Object.entries(b.strokes).map(([id, s]) => [id, { ...s, pts: s.pts.map((n) => Math.round(n * 100) / 100) }]),
     ),
   };
-  return gzipSync(JSON.stringify(slim), { level: 6 }).toString('base64');
+  return gzipSync(JSON.stringify(slim), { level: 6 });
 }
 
-export function decodeBoard(data: string): BoardState {
-  return JSON.parse(gunzipSync(Buffer.from(data, 'base64')).toString('utf8')) as BoardState;
+export function decodeBoard(gz: Buffer): BoardState {
+  return JSON.parse(gunzipSync(gz).toString('utf8')) as BoardState;
 }
 
 /* ------------------------------------------------------------------ */
@@ -81,18 +82,32 @@ const dirty = new Set<string>();
 async function snapshot(s: Session) {
   if (!dbEnabled) return;
   dirty.delete(s.info.id);
-  const data = encodeBoard(s.board);
-  if (data.length > MAX_SNAPSHOT_BYTES) {
-    console.warn(`[db] snapshot for ${s.info.code} is ${data.length} bytes — too large for D1, skipped`);
-    return;
-  }
+  const gz = encodeBoard(s.board);
   const now = Date.now();
   try {
+    // The board goes to R2 when configured (no size limit); otherwise inline in D1.
+    let location: 'r2' | 'd1' = 'd1';
+    let data = '';
+    if (r2Enabled) {
+      try {
+        await putObject(boardKey(s.info.id), gz, 'application/gzip');
+        location = 'r2';
+      } catch (e) {
+        console.error('[r2] board save failed, keeping it in D1 instead:', (e as Error).message);
+      }
+    }
+    if (location === 'd1') {
+      data = gz.toString('base64');
+      if (data.length > MAX_SNAPSHOT_BYTES) {
+        console.warn(`[db] board for ${s.info.code} is ${data.length} bytes — too large for a D1 row; configure R2`);
+        return;
+      }
+    }
     await query(
-      `INSERT INTO board_snapshots (session_id, seq, pages, strokes, data, updated_at) VALUES (?, ?, ?, ?, ?, ?)
+      `INSERT INTO board_snapshots (session_id, seq, pages, strokes, location, bytes, data, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT (session_id) DO UPDATE SET seq = excluded.seq, pages = excluded.pages, strokes = excluded.strokes,
-         data = excluded.data, updated_at = excluded.updated_at`,
-      [s.info.id, s.board.seq, s.board.pages, s.board.order.length, data, now],
+         location = excluded.location, bytes = excluded.bytes, data = excluded.data, updated_at = excluded.updated_at`,
+      [s.info.id, s.board.seq, s.board.pages, s.board.order.length, location, gz.length, data, now],
     );
     await query(`UPDATE class_sessions SET last_active = ? WHERE id = ?`, [now, s.info.id]);
   } catch (e) {
@@ -142,6 +157,7 @@ interface Row {
   teacher_name: string;
   board_key: string;
   started_at: number;
+  location: 'r2' | 'd1' | null;
   data: string | null;
 }
 
@@ -149,7 +165,7 @@ interface Row {
 export async function restoreLiveSessions(): Promise<number> {
   if (!dbEnabled) return 0;
   const rows = await query<Row>(
-    `SELECT s.id, s.code, s.subject, s.topic, s.teacher_uid, s.teacher_name, s.board_key, s.started_at, b.data
+    `SELECT s.id, s.code, s.subject, s.topic, s.teacher_uid, s.teacher_name, s.board_key, s.started_at, b.location, b.data
      FROM class_sessions s LEFT JOIN board_snapshots b ON b.session_id = s.id
      WHERE s.status = 'live' AND s.last_active > ?`,
     [Date.now() - config.sessionIdleMs],
@@ -157,7 +173,12 @@ export async function restoreLiveSessions(): Promise<number> {
   for (const r of rows) {
     let board: BoardState | undefined;
     try {
-      if (r.data) board = decodeBoard(r.data);
+      if (r.location === 'r2') {
+        const gz = await getObject(boardKey(r.id));
+        if (gz) board = decodeBoard(gz);
+      } else if (r.data) {
+        board = decodeBoard(Buffer.from(r.data, 'base64'));
+      }
     } catch (e) {
       console.error(`[db] could not read snapshot for ${r.code}:`, (e as Error).message);
     }

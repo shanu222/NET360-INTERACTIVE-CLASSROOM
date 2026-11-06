@@ -1,7 +1,8 @@
 /**
- * A local stand-in for the Cloudflare D1 HTTP API, backed by SQLite — for testing
- * persistence without a Cloudflare account. Same request and response shape as
+ * A local stand-in for Cloudflare D1 (HTTP API, backed by SQLite) and R2 (S3 PUT/GET,
+ * in memory) — for testing persistence without a Cloudflare account. Same shapes as
  *   POST /client/v4/accounts/:account/d1/database/:db/query  { sql, params }
+ *   PUT | GET /:bucket/:key
  *
  *   node scripts/d1-local.mjs [port] [file.sqlite]
  *   CLOUDFLARE_API_BASE=http://localhost:8787 CLOUDFLARE_ACCOUNT_ID=x CLOUDFLARE_D1_DATABASE_ID=x CLOUDFLARE_API_TOKEN=x npm start
@@ -12,14 +13,32 @@ import { DatabaseSync } from 'node:sqlite';
 const port = Number(process.argv[2] ?? 8787);
 const db = new DatabaseSync(process.argv[3] ?? ':memory:');
 
+const objects = new Map();
+
 createServer((req, res) => {
-  let body = '';
-  req.on('data', (c) => (body += c));
+  const chunks = [];
+  req.on('data', (c) => chunks.push(c));
   req.on('end', () => {
+    const body = Buffer.concat(chunks).toString('utf8');
     const send = (code, obj) => {
       res.writeHead(code, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(obj));
     };
+    // R2 stand-in: PUT / GET /<bucket>/<key> (S3 path style; signatures are not checked).
+    if (!(req.url ?? '').includes('/d1/database/')) {
+      if (!req.headers.authorization?.startsWith('AWS4-HMAC-SHA256')) return send(403, { error: 'unsigned' });
+      if (req.method === 'PUT') {
+        objects.set(req.url, Buffer.concat(chunks));
+        res.writeHead(200);
+        return res.end();
+      }
+      if (req.method === 'GET') {
+        const o = objects.get(req.url);
+        res.writeHead(o ? 200 : 404);
+        return res.end(o ?? '');
+      }
+      return send(405, {});
+    }
     if (req.method !== 'POST' || !/\/d1\/database\/[^/]+\/query$/.test(req.url ?? '')) return send(404, { success: false, errors: [{ message: 'not found' }] });
     if (!req.headers.authorization?.startsWith('Bearer ')) return send(401, { success: false, errors: [{ message: 'unauthorized' }] });
     try {

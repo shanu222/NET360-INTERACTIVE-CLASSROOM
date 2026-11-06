@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@net360/protocol": "*",
+    "aws4fetch": "^1.0.20",
     "express": "^4.21.1",
     "firebase-admin": "^13.0.1",
     "livekit-server-sdk": "^2.9.0",

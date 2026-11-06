@@ -15,7 +15,8 @@ import type {
   SocketAuth,
   Tool,
 } from '@net360/protocol';
-import { authMode, config, dbEnabled, epoch, mediaEnabled, originAllowed } from './config.ts';
+import { authMode, config, dbEnabled, epoch, mediaEnabled, originAllowed, r2Enabled } from './config.ts';
+import { putObject } from './storage.ts';
 import { mayTeach, userFromRequest, verifyUser } from './auth.ts';
 import { store, type Session } from './store.ts';
 import { mediaToken } from './media.ts';
@@ -49,7 +50,7 @@ app.get('/api/config', (_req, res) => {
   res.json({ authMode, media: mediaEnabled });
 });
 
-app.get('/api/health', (_req, res) => res.json({ ok: true, epoch, db: dbEnabled, auth: authMode }));
+app.get('/api/health', (_req, res) => res.json({ ok: true, epoch, db: dbEnabled, r2: r2Enabled, auth: authMode }));
 
 /** Start a class. */
 app.post('/api/sessions', async (req, res) => {
@@ -302,6 +303,14 @@ async function start() {
     }
     startSnapshots();
   }
+  if (r2Enabled) {
+    try {
+      await putObject('health/last-start.txt', new TextEncoder().encode(new Date().toISOString()), 'text/plain');
+      console.log(`R2 bucket "${config.r2.bucket}" reachable`);
+    } catch (e) {
+      console.error('[r2] check failed — boards fall back to D1 rows until fixed:', (e as Error).message);
+    }
+  }
   if (process.env.NODE_ENV === 'production' && authMode === 'dev') {
     console.warn('WARNING: FIREBASE_PROJECT_ID is not set — anyone can sign in with any name. Set it before real classes.');
   }
@@ -310,7 +319,7 @@ async function start() {
   }
   http.listen(config.port, '0.0.0.0', () => {
     console.log(
-      `NET360 Classroom server on :${config.port} — auth: ${authMode}, database: ${dbEnabled ? 'Cloudflare D1' : 'memory only'}, video: ${mediaEnabled ? 'on' : 'off'}`,
+      `NET360 Classroom server on :${config.port} — auth: ${authMode}, database: ${dbEnabled ? 'Cloudflare D1' : 'memory only'}${r2Enabled ? ' + R2' : ''}, video: ${mediaEnabled ? 'on' : 'off'}`,
     );
   });
 }

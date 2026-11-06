@@ -25,6 +25,10 @@ const env = {
   CLOUDFLARE_D1_DATABASE_ID: 'test',
   CLOUDFLARE_API_TOKEN: 'test',
   SNAPSHOT_EVERY_SECONDS: '60', // force the shutdown flush to do the saving
+  R2_BUCKET: 'net360classroom',
+  R2_ACCESS_KEY_ID: 'test',
+  R2_SECRET_ACCESS_KEY: 'test',
+  R2_ENDPOINT: `http://localhost:${D1_PORT}`,
 };
 
 function startServer(): Promise<ChildProcess> {
@@ -134,10 +138,13 @@ async function main() {
   const sessions = await d1(`SELECT status FROM class_sessions WHERE id = '${session.id}'`);
   const people = await d1(`SELECT COUNT(*) AS n FROM session_participants WHERE session_id = '${session.id}'`);
   const hands = await d1(`SELECT COUNT(*) AS n FROM hand_raises WHERE session_id = '${session.id}'`);
-  const snap = await d1(`SELECT strokes, length(data) AS bytes FROM board_snapshots WHERE session_id = '${session.id}'`);
-  console.log(`D1: session ${sessions[0]?.status}, attendance ${people[0]?.n} people, hands ${hands[0]?.n}, snapshot ${snap[0]?.strokes} strokes in ${snap[0]?.bytes} bytes`);
+  const snap = await d1(`SELECT strokes, location, bytes FROM board_snapshots WHERE session_id = '${session.id}'`);
+  console.log(`D1: session ${sessions[0]?.status}, attendance ${people[0]?.n} people, hands ${hands[0]?.n}`);
+  console.log(`Board saved in ${String(snap[0]?.location).toUpperCase()}: ${snap[0]?.strokes} strokes, ${snap[0]?.bytes} bytes`);
 
-  const ok = restored === everyone.length && newEpoch && synced === everyone.length && people[0]?.n === 11 && hands[0]?.n === 1;
+  const ok =
+    restored === everyone.length && newEpoch && synced === everyone.length &&
+    people[0]?.n === 11 && hands[0]?.n === 1 && snap[0]?.location === 'r2';
   console.log(ok ? '\nPASS' : '\nFAIL');
   everyone.forEach((c) => c.sock.disconnect());
   await sleep(300);

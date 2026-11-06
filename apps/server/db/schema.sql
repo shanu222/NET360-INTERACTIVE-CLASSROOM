@@ -19,14 +19,17 @@ CREATE TABLE IF NOT EXISTS class_sessions (
 CREATE INDEX IF NOT EXISTS idx_sessions_live ON class_sessions (status, last_active);
 CREATE INDEX IF NOT EXISTS idx_sessions_teacher ON class_sessions (teacher_uid, started_at);
 
--- Latest board state per lecture (gzip + base64 JSON). Lets a class survive a server restart
--- and keeps the notes after class.
+-- Latest board state per lecture. Lets a class survive a server restart and keeps the
+-- notes after class. The board itself (gzip JSON) is in R2 at boards/<session_id>.json.gz
+-- when R2 is configured (location = 'r2'); otherwise inline here as base64 (location = 'd1').
 CREATE TABLE IF NOT EXISTS board_snapshots (
   session_id    TEXT PRIMARY KEY REFERENCES class_sessions (id),
   seq           INTEGER NOT NULL,
   pages         INTEGER NOT NULL,
   strokes       INTEGER NOT NULL,
-  data          TEXT NOT NULL,
+  location      TEXT NOT NULL DEFAULT 'd1',
+  bytes         INTEGER NOT NULL DEFAULT 0,
+  data          TEXT NOT NULL DEFAULT '',
   updated_at    INTEGER NOT NULL
 );
 

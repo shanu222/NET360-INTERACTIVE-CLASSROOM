@@ -4,7 +4,8 @@ Three services, set up in this order:
 
 | Piece | Host | What it does |
 | --- | --- | --- |
-| Database | **Cloudflare D1** | Sessions, attendance, raised hands, board snapshots (classes survive server restarts) |
+| Database | **Cloudflare D1** | Sessions, attendance, raised hands (classes survive server restarts) |
+| File storage | **Cloudflare R2** | Saved boards of any size (optional — without it boards are kept in D1 rows, up to ~1.9 MB each) |
 | Realtime server | **Railway** | Socket.IO board sync, sign-in checks, LiveKit tokens |
 | Web app | **Vercel** | The screens: home, join, student, teacher, classroom board |
 
@@ -22,28 +23,52 @@ Sign-in uses **Firebase Authentication** (Google). Video later uses **LiveKit** 
    - Account Resources: your account
    - Create, then copy the token (it is shown once).
 
+### R2 (saved boards)
+
+1. **R2 Object Storage → Create bucket** → `net360classroom` (location: Asia-Pacific). Keep public access **off** — only the server reads it.
+2. R2 → **Manage API Tokens → Create API token** → **Object Read & Write**, **Apply to specific buckets only** → `net360classroom`.
+3. Copy the **Access Key ID** and **Secret Access Key** (S3 credentials) — the server uses those, not the token value.
+
 You don't need to create tables — the server creates them on first start from `apps/server/db/schema.sql`. To do it by hand instead:
 `npx wrangler d1 execute net360-classroom --remote --file apps/server/db/schema.sql`
 
 ## 2. Railway (realtime server)
 
-1. Railway → **New Project → Deploy from GitHub repo** → `NET360-INTERACTIVE-CLASSROOM`.
-   `railway.json` tells Railway to build `apps/server/Dockerfile`; leave Root Directory empty.
-2. **Variables** — add:
+1. Railway → **New Project → Deploy from GitHub repo** → `NET360-INTERACTIVE-CLASSROOM`. Leave Root Directory empty.
+2. **Variables → Raw Editor** — paste and fill in:
 
-   | Variable | Value |
+   ```env
+   RAILWAY_DOCKERFILE_PATH=apps/server/Dockerfile
+   NODE_ENV=production
+   CLOUDFLARE_ACCOUNT_ID=
+   CLOUDFLARE_D1_DATABASE_ID=
+   CLOUDFLARE_API_TOKEN=
+   R2_BUCKET=net360classroom
+   R2_ACCESS_KEY_ID=
+   R2_SECRET_ACCESS_KEY=
+   SNAPSHOT_EVERY_SECONDS=3
+   FIREBASE_PROJECT_ID=
+   TEACHER_EMAILS=
+   ALLOWED_ORIGINS=
+   ```
+
+   Railway sets `PORT` itself — don't add it. `ALLOWED_ORIGINS` is filled in after step 3.
+3. **Settings** — Railway's config-as-code is deprecated and new services ignore `railway.json`, so set these by hand:
+
+   | Setting | Value |
    | --- | --- |
-   | `CLOUDFLARE_ACCOUNT_ID` | from step 1 |
-   | `CLOUDFLARE_D1_DATABASE_ID` | from step 1 |
-   | `CLOUDFLARE_API_TOKEN` | from step 1 |
-   | `FIREBASE_PROJECT_ID` | your Firebase project id |
-   | `TEACHER_EMAILS` | optional: `teacher1@gmail.com,teacher2@gmail.com` |
-   | `ALLOWED_ORIGINS` | set in step 3 once you know the Vercel address |
+   | Source → Wait for CI | On |
+   | Build → Watch Paths | `apps/server/**`, `packages/protocol/**`, `package-lock.json` |
+   | Deploy → Healthcheck Path | `/api/health` |
+   | Deploy → Serverless | **Off** (a sleeping server drops live classes) |
+   | Scale → Region | **Southeast Asia (Singapore)** — closest to Pakistan |
+   | Scale → Replicas | **1** (never more: a second copy would split each class) |
+   | Scale → Replica Limits | ~1 vCPU / 1 GB is plenty for many classes of 40 |
 
-   Railway sets `PORT` itself — don't add it.
-3. **Settings → Networking → Generate Domain**. If Railway asks for a port, use the one the deploy log prints (`NET360 Classroom server on :XXXX`).
-4. Open `https://<your-app>.up.railway.app/api/health`. You should see `"db":true` and `"auth":"firebase"`.
-5. Keep the service at **1 replica**. Live classes are held in this one process; D1 snapshots let them survive restarts and redeploys, but two replicas would split a class in half.
+4. **Settings → Networking → Generate Domain**. If asked for a port, use the one in the deploy log (`NET360 Classroom server on :XXXX`, usually 8080).
+5. Open `https://<your-app>.up.railway.app/api/health` → expect `"db":true`, `"r2":true`, `"auth":"firebase"`. The deploy log should say `R2 bucket "net360classroom" reachable`.
+
+If the build log shows Railpack instead of Docker, set **Deploy → Custom Start Command** to `npm start` — that works too.
 
 ## 3. Vercel (web app)
 
@@ -98,6 +123,8 @@ Add to Railway: `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`.
 | Google sign-in popup closes with an error | Add the domain to Firebase **Authorized domains** |
 | "Please sign in to join" after Google sign-in | `FIREBASE_PROJECT_ID` on Railway doesn't match `VITE_FIREBASE_PROJECT_ID` on Vercel |
 | `/api/health` shows `"db":false` | One of the three `CLOUDFLARE_*` variables is missing on Railway |
+| `/api/health` shows `"r2":false` | `R2_BUCKET`, `R2_ACCESS_KEY_ID` or `R2_SECRET_ACCESS_KEY` is missing |
+| Log: `[r2] check failed … HTTP 403` | Wrong R2 keys, or the R2 token isn't allowed on this bucket (boards are kept in D1 meanwhile) |
 | Log: `[db] D1: Authentication error` | The API token lacks **Account · D1 · Edit** or belongs to another account |
 | Students on phones can't use the in-app scanner | Needs HTTPS — fine on Vercel. Phone camera apps can always scan the QR |
 

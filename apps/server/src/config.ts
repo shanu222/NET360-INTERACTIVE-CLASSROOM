@@ -51,6 +51,17 @@ export const config = {
     /** Only for tests against a local stand-in of the D1 API. */
     apiBase: (env.CLOUDFLARE_API_BASE ?? 'https://api.cloudflare.com').replace(/\/+$/, ''),
   },
+  /**
+   * Cloudflare R2 — saved boards (any size) and lecture notes. Optional: without it,
+   * boards are stored inside D1 rows (up to ~1.9 MB compressed per lecture).
+   */
+  r2: {
+    bucket: env.R2_BUCKET ?? '',
+    accessKeyId: env.R2_ACCESS_KEY_ID ?? '',
+    secretAccessKey: env.R2_SECRET_ACCESS_KEY ?? '',
+    /** Defaults to https://<CLOUDFLARE_ACCOUNT_ID>.r2.cloudflarestorage.com */
+    endpoint: (env.R2_ENDPOINT || (env.CLOUDFLARE_ACCOUNT_ID ? `https://${env.CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com` : '')).replace(/\/+$/, ''),
+  },
   /** How often changed boards are snapshotted to the database. */
   snapshotEveryMs: Number(env.SNAPSHOT_EVERY_SECONDS ?? 3) * 1000,
 };
@@ -59,6 +70,7 @@ export const config = {
 export const epoch = Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
 
 export const dbEnabled = Boolean(config.d1.accountId && config.d1.databaseId && config.d1.apiToken);
+export const r2Enabled = Boolean(config.r2.bucket && config.r2.accessKeyId && config.r2.secretAccessKey && config.r2.endpoint);
 
 export function originAllowed(origin: string | undefined): boolean {
   if (!origin) return true; // same-origin requests, curl, health checks
