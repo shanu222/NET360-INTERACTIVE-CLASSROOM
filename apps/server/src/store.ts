@@ -31,6 +31,8 @@ export interface Session {
   chats: ChatMessage[];
   /** Read receipts, keyed `${by}|${peer}`. */
   seen: Map<string, ChatSeen>;
+  /** Who may speak (see AudioState). */
+  audio: { open: boolean; allowed: Set<string>; blocked: Set<string> };
 }
 
 /**
@@ -58,6 +60,7 @@ class Store {
       lastActive: Date.now(),
       chats: [],
       seen: new Map(),
+      audio: { open: false, allowed: new Set(), blocked: new Set() },
     };
     this.byId.set(id, s);
     this.byCode.set(code, id);
@@ -77,6 +80,7 @@ class Store {
       lastActive: Date.now(),
       chats: [],
       seen: new Map(),
+      audio: { open: false, allowed: new Set(), blocked: new Set() },
     };
     this.byId.set(s.info.id, s);
     this.byCode.set(s.info.code, s.info.id);

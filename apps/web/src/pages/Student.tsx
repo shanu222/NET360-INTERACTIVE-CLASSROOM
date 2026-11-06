@@ -1,4 +1,4 @@
-import { Suspense, useState, type ReactNode } from 'react';
+import { Suspense, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import type { BoardRenderer } from '@net360/board-engine';
@@ -13,6 +13,8 @@ import type { ZoomCommand } from '../three/Classroom3D.tsx';
 import { codeFor, guestKey, lastName } from '../lib/code.ts';
 import { Navigate } from 'react-router-dom';
 import { ChatPop, ChatThread, useIncoming, useUnread } from '../components/Chat.tsx';
+import { useClassAudio } from '../lib/audio.ts';
+import { canSpeak } from '@net360/protocol';
 import type { ChatMessage } from '@net360/protocol';
 
 /**
@@ -35,6 +37,33 @@ export default function Student() {
   const [hideHint, setHideHint] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [mates, setMates] = useState(false);
+
+  // Class audio: hear the teacher; speak only when the teacher allows it.
+  const sound = useClassAudio(room.socket, room.audio, Boolean(room.welcome) && room.status !== 'ended' && room.status !== 'error');
+  const mayTalk = Boolean(room.audio && room.welcome && canSpeak(room.audio, room.welcome.me.uid));
+  const [invited, setInvited] = useState(false);
+  const wasAllowed = useRef(false);
+  useEffect(() => {
+    if (mayTalk && !wasAllowed.current && sound.status === 'on') setInvited(true);
+    if (!mayTalk) setInvited(false);
+    wasAllowed.current = mayTalk;
+  }, [mayTalk, sound.status]);
+  useEffect(() => {
+    if (!room.socket) return;
+    const s = room.socket;
+    const muted = () => flash('Your teacher turned your microphone off');
+    s.on('mutedByTeacher', muted);
+    return () => {
+      s.off('mutedByTeacher', muted);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [room.socket]);
+  useEffect(() => {
+    if (sound.micError) flash(sound.micError);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sound.micError]);
+  const teacherTalking =
+    sound.teacherLive && [...sound.speaking].some((id) => id !== room.welcome?.me.uid && !room.people.some((p) => p.uid === id));
   const me = room.welcome?.me.uid;
   const unread = useUnread(room.chats, me, () => 'teacher', chatOpen ? 'teacher' : null);
   const teacherUid = room.chats.find((m) => m.from !== me)?.from ?? room.chats.find((m) => m.from === me && m.to)?.to ?? '';
@@ -106,6 +135,11 @@ export default function Student() {
           )}
         </span>
         <StatusPill status={room.status} />
+        {sound.teacherLive && (
+          <span className={`pill pill--onair ${teacherTalking && sound.heard ? 'is-talking' : ''} ${!sound.heard ? 'is-quiet' : ''}`} title={sound.heard ? 'Your teacher’s microphone is on' : 'Class sound is off on this device'}>
+            {sound.heard ? <Icon.mic /> : <Icon.speakerOff />} {!sound.heard ? 'Sound off' : teacherTalking ? 'Teacher speaking' : 'Teacher on air'}
+          </span>
+        )}
         {room.people.length > 0 && (
           <span className="mates">
             <button className="topline__btn topline__btn--count" onClick={() => setMates((v) => !v)} aria-label="Who is in class" title="Who is in class">
@@ -128,6 +162,7 @@ export default function Student() {
                           {p.name}
                           {p.uid === room.welcome?.me.uid && <small>You</small>}
                           {p.hand && <small className="mates__hand">Hand up</small>}
+                          {sound.speaking.has(p.uid) && <small className="mates__talk">Speaking</small>}
                         </li>
                       ))}
                   </ul>
@@ -168,6 +203,35 @@ export default function Student() {
             )}
           </AnimatePresence>
         </div>
+        {sound.status === 'on' && (
+          <button
+            className={`fab fab--quiet ${!sound.heard ? 'is-off' : ''} ${idle && !menu && sound.heard ? 'is-idle' : ''}`}
+            aria-pressed={!sound.heard}
+            aria-label={sound.heard ? 'Silence the class on this device' : 'Hear the class again'}
+            title={sound.heard ? 'Silence the class on this device' : 'Hear the class again'}
+            onClick={() => {
+              sound.setHeard(!sound.heard);
+              flash(sound.heard ? 'Class sound off on this device' : 'Class sound on');
+            }}
+          >
+            {sound.heard ? <Icon.speaker /> : <Icon.speakerOff />}
+          </button>
+        )}
+        {sound.status === 'on' && mayTalk && (
+          <button
+            className={`fab fab--quiet fab--mic ${sound.micOn ? 'is-live' : ''} ${sound.micBusy ? 'is-busy' : ''}`}
+            disabled={sound.micBusy}
+            aria-pressed={sound.micOn}
+            aria-label={sound.micOn ? 'Turn my microphone off' : 'Turn my microphone on'}
+            title={sound.micOn ? 'Turn my microphone off' : 'Turn my microphone on'}
+            onClick={() => {
+              setInvited(false);
+              void sound.setMic(!sound.micOn);
+            }}
+          >
+            {sound.micOn ? <Icon.mic /> : <Icon.micOff />}
+          </button>
+        )}
         <button
           className={`fab fab--quiet fab--chat ${chatOpen ? 'is-on' : ''} ${idle && !menu && !chatOpen && !unread.total ? 'is-idle' : ''}`}
           aria-label="Message your teacher"
@@ -191,6 +255,33 @@ export default function Student() {
           <span>{room.hand ? 'Hand raised' : 'Raise hand'}</span>
         </motion.button>
       </div>
+
+      <AnimatePresence>
+        {sound.status === 'on' && sound.needsTap && sound.heard && (
+          <motion.button className="soundtap" initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} onClick={sound.startSound}>
+            <Icon.speaker /> Tap to hear your teacher
+          </motion.button>
+        )}
+        {invited && mayTalk && !sound.micOn && (
+          <motion.div className="invite" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+            <Icon.mic />
+            <span>Your teacher invited you to speak</span>
+            <button
+              className="btn btn--primary btn--sm"
+              disabled={sound.micBusy}
+              onClick={() => {
+                setInvited(false);
+                void sound.setMic(true);
+              }}
+            >
+              Turn on my mic
+            </button>
+            <button className="btn btn--ghost btn--sm" onClick={() => setInvited(false)}>
+              Not now
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {chatOpen && (

@@ -10,6 +10,7 @@ import type {
   BoardEvent,
   BoardEventBody,
   ChatMessage,
+  AudioState,
   ClientToServer,
   PersonPublic,
   RosterEntry,
@@ -22,7 +23,7 @@ import { authMode, config, dbEnabled, epoch, mediaEnabled, originAllowed, r2Enab
 import { putObject } from './storage.ts';
 import { mayTeach, userFromRequest, verifyUser } from './auth.ts';
 import { store, type Session } from './store.ts';
-import { mediaToken } from './media.ts';
+import { mediaParticipants, mediaToken, setSpeak } from './media.ts';
 import { migrate } from './db.ts';
 import { flushAll, persist, restoreLiveSessions, startSnapshots } from './persist.ts';
 import { padKeyFor } from './passes.ts';
@@ -57,9 +58,9 @@ app.get('/api/config', (_req, res) => {
 
 /** What this server can do — lets you confirm a deploy picked up the latest code. */
 const VERSION = (process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.SOURCE_VERSION ?? 'local').slice(0, 7);
-const FEATURES = ['name-code-join', 'live-chat', 'read-receipts'];
+const FEATURES = ['name-code-join', 'live-chat', 'read-receipts', 'class-audio'];
 app.get('/api/health', (_req, res) =>
-  res.json({ ok: true, version: VERSION, features: FEATURES, epoch, db: dbEnabled, r2: r2Enabled, auth: authMode }),
+  res.json({ ok: true, version: VERSION, features: FEATURES, epoch, db: dbEnabled, r2: r2Enabled, audio: mediaEnabled, auth: authMode }),
 );
 
 /** Who is signed in, and whether they may start classes. */
@@ -108,6 +109,7 @@ app.post('/api/sessions/:id/media-token', async (req, res) => {
     identity: user.uid,
     name: user.name,
     canPublish: user.uid === s.teacherUid,
+    teacher: user.uid === s.teacherUid,
   });
   if (!t) return res.status(503).json({ error: 'Video is not configured on this server.' });
   res.json(t);
@@ -186,6 +188,20 @@ function pushPresence(s: Session) {
   io.to(room(s)).emit('cls', s.cls);
   io.to(teacherRoom(s)).emit('roster', rosterList(s));
   io.to(room(s)).emit('people', peopleList(s));
+}
+
+/** Who may speak, as every screen sees it. */
+function audioState(s: Session): AudioState {
+  return { available: mediaEnabled, open: s.audio.open, allowed: [...s.audio.allowed], blocked: [...s.audio.blocked] };
+}
+const studentMaySpeak = (s: Session, uid: string) => !s.audio.blocked.has(uid) && (s.audio.open || s.audio.allowed.has(uid));
+
+/** Speaking rules changed: tell every screen, and apply them in the media room. */
+async function pushAudio(s: Session, changed?: string[]) {
+  io.to(room(s)).emit('audio', audioState(s));
+  if (!mediaEnabled) return;
+  const ids = changed ?? (await mediaParticipants(s.info.id)).filter((id) => s.roster.has(id));
+  await Promise.all(ids.map((id) => setSpeak(s.info.id, id, studentMaySpeak(s, id))));
 }
 
 /** A hand went up or down. */
@@ -275,7 +291,52 @@ io.on('connection', (socket: Socket<ClientToServer, ServerToClient>) => {
   socket.emit('welcome', { role, me: { uid, name, clientId }, session: s.info, cls: s.cls, canWrite, epoch });
   if (role === 'teacher') socket.emit('roster', rosterList(s));
   if (role === 'student') socket.emit('hand', s.roster.get(uid)!.hand);
+  if (role !== 'board') socket.emit('audio', audioState(s));
   pushPresence(s);
+
+  // Class audio: the teacher is always heard; students speak when allowed.
+  socket.on('mediaJoin', async (ack) => {
+    if (typeof ack !== 'function') return;
+    if (role === 'board' || s.ended) return ack({ error: 'Audio is not available here.' });
+    const t = await mediaToken({
+      sessionId: s.info.id,
+      identity: uid,
+      name,
+      canPublish: role === 'teacher' || studentMaySpeak(s, uid),
+      teacher: role === 'teacher',
+    }).catch(() => null);
+    ack(t ?? { error: 'Class audio is not set up yet.' });
+  });
+  socket.on('audioOpen', (open) => {
+    if (role !== 'teacher') return;
+    s.audio.open = Boolean(open);
+    if (s.audio.open) s.audio.blocked.clear();
+    else s.audio.allowed.clear();
+    void pushAudio(s);
+  });
+  socket.on('allowSpeak', (msg) => {
+    if (role !== 'teacher') return;
+    const who = String(msg?.uid ?? '');
+    if (!s.roster.has(who)) return;
+    if (msg?.allow) {
+      s.audio.allowed.add(who);
+      s.audio.blocked.delete(who);
+    } else {
+      s.audio.allowed.delete(who);
+      s.audio.blocked.add(who);
+      io.to(userRoom(s, who)).emit('mutedByTeacher');
+    }
+    void pushAudio(s, [who]);
+  });
+  socket.on('muteAll', () => {
+    if (role !== 'teacher') return;
+    const speaking = [...s.roster.keys()].filter((id) => studentMaySpeak(s, id));
+    s.audio.open = false;
+    s.audio.allowed.clear();
+    s.audio.blocked.clear();
+    for (const id of speaking) io.to(userRoom(s, id)).emit('mutedByTeacher');
+    void pushAudio(s);
+  });
 
   // Catch-up: replay what was missed, or send the whole board.
   socket.on('sync', (lastSeq) => {
@@ -434,7 +495,7 @@ async function start() {
   }
   http.listen(config.port, '0.0.0.0', () => {
     console.log(
-      `[version ${VERSION}] NET360 Classroom server on :${config.port} — auth: ${authMode}, database: ${dbEnabled ? 'Cloudflare D1' : 'memory only'}${r2Enabled ? ' + R2' : ''}, video: ${mediaEnabled ? 'on' : 'off'}`,
+      `[version ${VERSION}] NET360 Classroom server on :${config.port} — auth: ${authMode}, database: ${dbEnabled ? 'Cloudflare D1' : 'memory only'}${r2Enabled ? ' + R2' : ''}, class audio: ${mediaEnabled ? 'on' : 'off'}`,
     );
   });
 }

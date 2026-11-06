@@ -233,6 +233,25 @@ export interface ChatMessage {
 /** `by` has read the conversation with `peer` up to `at`. */
 export interface ChatSeen { by: string; peer: string; at: number }
 
+/**
+ * Class audio. The teacher is always heard; students speak only when the teacher
+ * allows it (one by one, or everyone). The server enforces this in the media room.
+ */
+export interface AudioState {
+  /** Class audio is set up on this server. */
+  available: boolean;
+  /** Everyone may switch their own microphone on (except `blocked`). */
+  open: boolean;
+  /** Students the teacher has invited to speak. */
+  allowed: string[];
+  /** Students the teacher has muted (even while everyone may speak). */
+  blocked: string[];
+}
+
+export function canSpeak(a: AudioState, uid: string): boolean {
+  return !a.blocked.includes(uid) && (a.open || a.allowed.includes(uid));
+}
+
 /** What every screen knows about the people in class (for the 3D room). */
 export interface PersonPublic {
   uid: string;
@@ -278,6 +297,10 @@ export interface ServerToClient {
   chatSeen: (s: ChatSeen[]) => void;
   /** The other person is typing. */
   typing: (from: string) => void;
+  /** Who may speak right now. */
+  audio: (a: AudioState) => void;
+  /** Student: the teacher has just muted you. */
+  mutedByTeacher: () => void;
 }
 
 /** Client → server */
@@ -296,6 +319,14 @@ export interface ClientToServer {
   chatSeen: (msg: { peer?: string; at: number }) => void;
   /** I am typing to `to` (students: omit). */
   typing: (to?: string) => void;
+  /** Join the class audio: returns where to connect, with this screen's permissions. */
+  mediaJoin: (ack: (r: { url: string; token: string } | { error: string }) => void) => void;
+  /** Teacher: let every student switch their microphone on (true) or not (false). */
+  audioOpen: (open: boolean) => void;
+  /** Teacher: let one student speak, or mute them. */
+  allowSpeak: (msg: { uid: string; allow: boolean }) => void;
+  /** Teacher: mute every student at once. */
+  muteAll: () => void;
 }
 
 export interface SocketAuth {

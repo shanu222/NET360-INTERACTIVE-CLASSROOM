@@ -2,6 +2,10 @@
 const P = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.75, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
 
 export const Icon = {
+  mic: () => (<svg viewBox="0 0 24 24" {...P}><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5.5 11a6.5 6.5 0 0013 0M12 17.5V21" /></svg>),
+  micOff: () => (<svg viewBox="0 0 24 24" {...P}><path d="M15 9.5V6a3 3 0 00-5.6-1.5M9 9v2a3 3 0 004.6 2.5M5.5 11a6.5 6.5 0 0010.6 5M18.5 11a6.4 6.4 0 01-.5 2.4M12 17.5V21M4 4l16 16" /></svg>),
+  speaker: () => (<svg viewBox="0 0 24 24" {...P}><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" /><path d="M15.5 9a4 4 0 010 6M18 6.5a7.5 7.5 0 010 11" /></svg>),
+  speakerOff: () => (<svg viewBox="0 0 24 24" {...P}><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" /><path d="M16 9.5l5 5M21 9.5l-5 5" /></svg>),
   chat: () => (<svg viewBox="0 0 24 24" {...P}><path d="M20 12a7.5 7.5 0 01-11 6.6L4 20l1.4-4.4A7.5 7.5 0 1120 12z" /></svg>),
   send: () => (<svg viewBox="0 0 24 24" {...P}><path d="M4 12l16-8-6 16-2.5-6.5L4 12z" /></svg>),
   close: () => (<svg viewBox="0 0 24 24" {...P}><path d="M6 6l12 12M18 6L6 18" /></svg>),

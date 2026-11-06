@@ -9,7 +9,7 @@ Three services, set up in this order:
 | Realtime server | **Railway** | Socket.IO board sync, sign-in checks, LiveKit tokens |
 | Web app | **Vercel** | The screens: home, join, student, teacher, classroom board |
 
-Sign-in uses **Firebase Authentication** (Google). Video later uses **LiveKit** (Cloud or self-hosted).
+Sign-in uses **Firebase Authentication** (Google). Class audio uses **LiveKit** (Cloud or self-hosted).
 
 ---
 
@@ -108,11 +108,27 @@ If the build log shows Railpack instead of Docker, set **Deploy → Custom Start
 - Railway → Service → **Settings → Networking → Custom Domain** → e.g. `api.classroom.net360.pk`; then update `VITE_API_URL` (and redeploy Vercel) and `ALLOWED_ORIGINS`.
 - Add the new web domain to Firebase authorized domains.
 
-## Video (Phase 4) — LiveKit
+## Class audio — LiveKit
 
-Add to Railway: `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`.
-- **LiveKit Cloud** (recommended for the pilot): create a project at cloud.livekit.io; `LIVEKIT_URL=wss://<project>.livekit.cloud`.
-- **Self-hosted**: run LiveKit on your own server (it needs its own UDP ports and TLS — Railway is not a good fit for the media server itself); point `LIVEKIT_URL` at it.
+The teacher speaks to the whole class; students speak only when the teacher lets them
+(one by one, or everyone), and the teacher can mute anyone or everyone. LiveKit enforces
+these permissions, so a student's app can't get around a mute. Students can also silence
+the class on their own device.
+
+Add to Railway → Variables, then redeploy:
+
+| Variable | Value |
+|---|---|
+| `LIVEKIT_URL` | `wss://<your-project>.livekit.cloud` |
+| `LIVEKIT_API_KEY` | from LiveKit Cloud → Settings → Keys |
+| `LIVEKIT_API_SECRET` | from the same key |
+
+- **LiveKit Cloud** (recommended): create a free project at cloud.livekit.io, then
+  Settings → Keys → create a key. Copy the project URL and the key + secret.
+- **Self-hosted**: run LiveKit on your own server (it needs its own UDP ports and TLS —
+  Railway is not a good fit for the media server itself); point `LIVEKIT_URL` at it.
+
+Check: `/api/health` shows `"audio": true`. Until these are set, the audio buttons stay hidden.
 
 ## Troubleshooting
 

@@ -17,6 +17,8 @@ import { StatusPill, friendly } from './Student.tsx';
 import { Classroom3D, can3d } from '../lib/webgl.ts';
 import { Lobby } from '../components/Lobby.tsx';
 import { ChatPop, ChatThread, useIncoming, useUnread } from '../components/Chat.tsx';
+import { useClassAudio } from '../lib/audio.ts';
+import { canSpeak } from '@net360/protocol';
 import type { ChatMessage } from '@net360/protocol';
 
 const KEY_TOOLS: Record<string, PenSettings['tool']> = { p: 'pen', h: 'highlighter', e: 'eraser', l: 'line', a: 'arrow', r: 'rect', c: 'circle' };
@@ -155,6 +157,19 @@ export default function Teacher() {
   }, [input, pg.live, pg.pages, walking]);
 
   const me = room.welcome?.me.uid;
+
+  // Class audio: the teacher speaks to everyone and decides who else may speak.
+  const sound = useClassAudio(room.socket, room.audio, Boolean(room.welcome) && room.status !== 'ended' && room.status !== 'error');
+  const audioOn = sound.status === 'on';
+  const speakers = room.audio ? room.roster.filter((r) => r.online && canSpeak(room.audio!, r.uid)) : [];
+  const letSpeak = (uid: string, allow: boolean) => room.socket?.emit('allowSpeak', { uid, allow });
+  const [audioNote, setAudioNote] = useState('');
+  useEffect(() => {
+    if (!sound.micError) return;
+    setAudioNote(sound.micError);
+    const t = window.setTimeout(() => setAudioNote(''), 5000);
+    return () => clearTimeout(t);
+  }, [sound.micError]);
   const otherOf = (m: { from: string; to: string }) => (m.from === me ? m.to : m.from);
   const unread = useUnread(room.chats, me, otherOf, panel === 'chat' ? thread : null);
   const threads = useMemo(() => {
@@ -268,6 +283,23 @@ export default function Teacher() {
                 <Icon.board /> Board
               </button>
             </div>
+          )}
+          {room.audio?.available && (
+            <button
+              className={`micbtn ${sound.micOn ? 'is-live' : ''} ${sound.micOn && me && sound.speaking.has(me) ? 'is-talking' : ''}`}
+              disabled={!audioOn || sound.micBusy}
+              aria-pressed={sound.micOn}
+              onClick={() => void sound.setMic(!sound.micOn)}
+              title={sound.micOn ? 'Students can hear you — click to mute' : 'Turn your microphone on so students can hear you'}
+            >
+              {sound.micOn ? <Icon.mic /> : <Icon.micOff />}
+              <span>{!audioOn ? 'Connecting…' : sound.micBusy ? (sound.micOn ? 'Turning off…' : 'Turning on…') : sound.micOn ? 'On air' : 'Mic off'}</span>
+            </button>
+          )}
+          {audioOn && speakers.length > 0 && (
+            <button className="btn btn--ghost btn--sm" onClick={() => room.socket?.emit('muteAll')} title="Turn off every student's microphone">
+              <Icon.micOff /> Mute all
+            </button>
           )}
           <StatusPill status={room.status} />
           {tablet.seen && (
@@ -459,7 +491,31 @@ export default function Teacher() {
                     {room.people.length === 0 && <p className="classview__empty">Students appear at their desks as they join</p>}
                   </div>
                 )}
-                <p className="panel__label">Raised hands</p>
+                {room.audio?.available && (
+                  <div className="audioctl">
+                    <p className="panel__label">Class audio</p>
+                    <label className="switch">
+                      <input
+                        type="checkbox"
+                        checked={room.audio.open}
+                        onChange={(e) => room.socket?.emit('audioOpen', e.target.checked)}
+                      />
+                      <span className="switch__track" />
+                      <span>Students may turn on their mic</span>
+                    </label>
+                    <p className="muted small">
+                      {room.audio.open
+                        ? 'Everyone can speak. Mute anyone below.'
+                        : speakers.length
+                          ? `${speakers.length} ${speakers.length === 1 ? 'student' : 'students'} invited to speak.`
+                          : 'Only you can speak. Invite a student with the mic button.'}
+                    </p>
+                    <button className="btn btn--ghost btn--sm" disabled={!speakers.length} onClick={() => room.socket?.emit('muteAll')}>
+                      <Icon.micOff /> Mute all students
+                    </button>
+                  </div>
+                )}
+                <p className="panel__label panel__label--gap">Raised hands</p>
                 {hands.length === 0 ? (
                   <p className="muted small">No hands up right now.</p>
                 ) : (
@@ -467,6 +523,11 @@ export default function Teacher() {
                     {hands.map((h) => (
                       <li key={h.uid}>
                         <span>{h.name}</span>
+                        {room.audio?.available && !canSpeak(room.audio, h.uid) && (
+                          <button className="btn btn--ghost btn--sm" onClick={() => letSpeak(h.uid, true)} title={`Let ${h.name} speak`}>
+                            <Icon.mic /> Let speak
+                          </button>
+                        )}
                         <button className="btn btn--ghost btn--sm" onClick={() => room.socket?.emit('lower', h.uid)}>
                           <Icon.check /> Done
                         </button>
@@ -479,11 +540,21 @@ export default function Teacher() {
                   {room.roster
                     .filter((r) => r.online)
                     .map((r) => (
-                      <li key={r.uid}>
+                      <li key={r.uid} className={sound.speaking.has(r.uid) ? 'is-talking' : ''}>
                         <button className="roster__btn" onClick={() => chatWith(r.uid)} title={`Message ${r.name}`}>
                           <span>{r.name}</span>
                           <Icon.chat />
                         </button>
+                        {room.audio?.available && (
+                          <button
+                            className={`roster__mic ${canSpeak(room.audio, r.uid) ? 'is-allowed' : ''}`}
+                            onClick={() => letSpeak(r.uid, !canSpeak(room.audio!, r.uid))}
+                            title={canSpeak(room.audio, r.uid) ? `Mute ${r.name}` : `Let ${r.name} speak`}
+                            aria-label={canSpeak(room.audio, r.uid) ? `Mute ${r.name}` : `Let ${r.name} speak`}
+                          >
+                            {canSpeak(room.audio, r.uid) ? <Icon.mic /> : <Icon.micOff />}
+                          </button>
+                        )}
                       </li>
                     ))}
                 </ul>
@@ -519,6 +590,14 @@ export default function Teacher() {
       {!(panel === 'chat' && thread === pop?.from) && (
         <ChatPop msg={pop} onClose={() => setPop(null)} onOpen={() => { if (pop) chatWith(pop.from); setPop(null); }} />
       )}
+
+      <AnimatePresence>
+        {audioNote && (
+          <motion.div className="toast" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+            {audioNote}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <div className="joined" aria-live="polite">
         <AnimatePresence>
