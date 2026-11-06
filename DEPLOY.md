@@ -58,7 +58,7 @@ You don't need to create tables — the server creates them on first start from 
    | Setting | Value |
    | --- | --- |
    | Source → Wait for CI | On |
-   | Build → Watch Paths | `apps/server/**`, `packages/protocol/**`, `package-lock.json` |
+   | Build → Watch Paths | leave **empty** (Railway then deploys every push; watch paths caused updates to be skipped) |
    | Deploy → Healthcheck Path | `/api/health` |
    | Deploy → Serverless | **Off** (a sleeping server drops live classes) |
    | Scale → Region | **Southeast Asia (Singapore)** — closest to Pakistan |
