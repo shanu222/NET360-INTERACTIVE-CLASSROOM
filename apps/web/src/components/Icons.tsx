@@ -1,0 +1,30 @@
+/** Small line icons (24 × 24, 1.75 stroke). */
+const P = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.75, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
+
+export const Icon = {
+  pen: () => (<svg viewBox="0 0 24 24" {...P}><path d="M4 20l1-4L16.5 4.5a2.1 2.1 0 013 3L8 19l-4 1z" /><path d="M14.5 6.5l3 3" /></svg>),
+  highlighter: () => (<svg viewBox="0 0 24 24" {...P}><path d="M9 15l-3 3h5l1.5-1.5" /><path d="M9 15l7.5-10.5 3 3L9 15z" /><path d="M4 21h16" opacity=".5" /></svg>),
+  eraser: () => (<svg viewBox="0 0 24 24" {...P}><path d="M8 20h12" /><path d="M5.5 16.5l9-9a2 2 0 012.8 0l1.2 1.2a2 2 0 010 2.8L11 19H8.5z" /><path d="M10 12l4.5 4.5" /></svg>),
+  shapes: () => (<svg viewBox="0 0 24 24" {...P}><circle cx="8" cy="8" r="4" /><rect x="12" y="12" width="8" height="8" rx="1" /></svg>),
+  line: () => (<svg viewBox="0 0 24 24" {...P}><path d="M5 19L19 5" /></svg>),
+  arrow: () => (<svg viewBox="0 0 24 24" {...P}><path d="M5 19L19 5M11 5h8v8" /></svg>),
+  rect: () => (<svg viewBox="0 0 24 24" {...P}><rect x="4" y="6" width="16" height="12" rx="1" /></svg>),
+  circle: () => (<svg viewBox="0 0 24 24" {...P}><ellipse cx="12" cy="12" rx="8" ry="7" /></svg>),
+  undo: () => (<svg viewBox="0 0 24 24" {...P}><path d="M9 14L4 9l5-5" /><path d="M4 9h10a6 6 0 010 12h-3" /></svg>),
+  redo: () => (<svg viewBox="0 0 24 24" {...P}><path d="M15 14l5-5-5-5" /><path d="M20 9H10a6 6 0 000 12h3" /></svg>),
+  clear: () => (<svg viewBox="0 0 24 24" {...P}><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" /></svg>),
+  hand: () => (<svg viewBox="0 0 24 24" {...P}><path d="M8 13V5.5a1.5 1.5 0 013 0V11m0-6.5a1.5 1.5 0 013 0V11m0-5a1.5 1.5 0 013 0v7.5c0 4.5-2.5 7.5-6.5 7.5-3 0-4.5-1.5-6-4l-2.2-3.8a1.5 1.5 0 012.6-1.5L8 13" /></svg>),
+  more: () => (<svg viewBox="0 0 24 24" {...P}><circle cx="5" cy="12" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /></svg>),
+  left: () => (<svg viewBox="0 0 24 24" {...P}><path d="M15 5l-7 7 7 7" /></svg>),
+  right: () => (<svg viewBox="0 0 24 24" {...P}><path d="M9 5l7 7-7 7" /></svg>),
+  plus: () => (<svg viewBox="0 0 24 24" {...P}><path d="M12 5v14M5 12h14" /></svg>),
+  qr: () => (<svg viewBox="0 0 24 24" {...P}><rect x="4" y="4" width="6" height="6" rx="1" /><rect x="14" y="4" width="6" height="6" rx="1" /><rect x="4" y="14" width="6" height="6" rx="1" /><path d="M14 14h2v2M20 14v6h-4M14 18v2" /></svg>),
+  display: () => (<svg viewBox="0 0 24 24" {...P}><rect x="3" y="4" width="18" height="12" rx="1.5" /><path d="M8 20h8M12 16v4" /></svg>),
+  users: () => (<svg viewBox="0 0 24 24" {...P}><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20a6.5 6.5 0 0113 0" /><path d="M16 4.5a3.5 3.5 0 010 7M18 14.5a6.5 6.5 0 013.5 5.5" /></svg>),
+  download: () => (<svg viewBox="0 0 24 24" {...P}><path d="M12 4v11m-5-5l5 5 5-5M5 20h14" /></svg>),
+  expand: () => (<svg viewBox="0 0 24 24" {...P}><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" /></svg>),
+  scan: () => (<svg viewBox="0 0 24 24" {...P}><path d="M4 8V5a1 1 0 011-1h3M16 4h3a1 1 0 011 1v3M20 16v3a1 1 0 01-1 1h-3M8 20H5a1 1 0 01-1-1v-3M4 12h16" /></svg>),
+  rotate: () => (<svg viewBox="0 0 24 24" {...P}><rect x="7" y="3" width="10" height="18" rx="2" /><path d="M20 14a8 8 0 01-5 6.5M18 18l-3 2.5 3.5 1" /></svg>),
+  check: () => (<svg viewBox="0 0 24 24" {...P}><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>),
+  close: () => (<svg viewBox="0 0 24 24" {...P}><path d="M6 6l12 12M18 6L6 18" /></svg>),
+};

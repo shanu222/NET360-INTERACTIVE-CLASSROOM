@@ -1,0 +1,24 @@
+{
+  "name": "net360-interactive-classroom",
+  "private": true,
+  "version": "0.1.0",
+  "description": "NET360 Interactive Classroom — a physical classroom enhanced by a synchronized digital board.",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -n server,web -c blue,magenta \"npm:dev -w apps/server\" \"npm:dev -w apps/web\"",
+    "build": "npm run build -w apps/web",
+    "start": "npm start -w apps/server",
+    "typecheck": "tsc -p packages/protocol && tsc -p packages/board-engine && tsc -p apps/server && tsc -p apps/web",
+    "loadtest": "tsx scripts/loadtest.ts"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0",
+    "typescript": "^5.6.3"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

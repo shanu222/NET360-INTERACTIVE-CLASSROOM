@@ -1,0 +1,12 @@
+{
+  "name": "@net360/board-engine",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "dependencies": {
+    "@net360/protocol": "*",
+    "perfect-freehand": "^1.2.2"
+  }
+}

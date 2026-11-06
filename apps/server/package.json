@@ -1,0 +1,24 @@
+{
+  "name": "@net360/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch --env-file-if-exists=../../.env src/index.ts",
+    "start": "tsx --env-file-if-exists=../../.env src/index.ts"
+  },
+  "dependencies": {
+    "@net360/protocol": "*",
+    "express": "^4.21.1",
+    "firebase-admin": "^13.0.1",
+    "livekit-server-sdk": "^2.9.0",
+    "nanoid": "^5.0.9",
+    "socket.io": "^4.8.1",
+    "socket.io-msgpack-parser": "^3.0.2",
+    "tsx": "^4.19.2"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.10.0"
+  }
+}
