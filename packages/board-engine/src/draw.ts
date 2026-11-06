@@ -12,6 +12,19 @@ export const INK = {
 
 export const BOARD_BG = '#1C2A27';
 
+/** On a (white) slide the light board inks are drawn in strong, readable versions. */
+const ON_SLIDE: Record<string, string> = {
+  [INK.chalk.toLowerCase()]: '#1B2A4A',
+  [INK.amber.toLowerCase()]: '#C46A00',
+  [INK.sky.toLowerCase()]: '#1565C0',
+  [INK.mint.toLowerCase()]: '#0F7B4F',
+  [INK.coral.toLowerCase()]: '#D3362A',
+};
+export function slideInk<T extends { st: { c: string } }>(s: T): T {
+  const c = ON_SLIDE[s.st.c.toLowerCase()];
+  return c ? { ...s, st: { ...s.st, c } } : s;
+}
+
 /** Turn a perfect-freehand outline into a smooth closed Path2D. */
 function outlineToPath(outline: number[][]): Path2D {
   const path = new Path2D();

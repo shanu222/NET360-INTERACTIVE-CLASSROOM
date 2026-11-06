@@ -1,8 +1,46 @@
 import { BOARD_H, BOARD_W, pageStrokes, type Stroke } from '@net360/protocol';
 import type { BoardSession } from './session.ts';
-import { drawStroke } from './draw.ts';
+import { drawStroke, slideInk } from './draw.ts';
 
 export type OverlayFn = (ctx: CanvasRenderingContext2D) => void;
+
+/** Slide images, loaded once per page and shared by every board on the page. */
+const slideImages = new Map<string, HTMLImageElement>();
+const slideWaiters = new Map<string, Set<() => void>>();
+
+/** Turns a slide reference into a URL (set once by the app; see setSlideUrl). */
+let slideUrl = (img: string) => img;
+export function setSlideUrl(fn: (img: string) => string) {
+  slideUrl = fn;
+}
+
+/** The slide image if it's ready; otherwise starts loading it and calls `ready` when done. */
+export function slideImage(img: string, ready: () => void): HTMLImageElement | null {
+  const have = slideImages.get(img);
+  if (have?.complete && have.naturalWidth) return have;
+  let waiters = slideWaiters.get(img);
+  if (!waiters) slideWaiters.set(img, (waiters = new Set()));
+  waiters.add(ready);
+  if (!have) {
+    const el = new Image();
+    // Boards draw slides into canvases that the 3D room uploads to the GPU.
+    el.crossOrigin = 'anonymous';
+    el.decoding = 'async';
+    const done = () => {
+      const w = slideWaiters.get(img);
+      slideWaiters.delete(img);
+      w?.forEach((f) => f());
+    };
+    el.onload = done;
+    el.onerror = () => {
+      slideImages.delete(img); // try again next time
+      done();
+    };
+    el.src = slideUrl(img);
+    slideImages.set(img, el);
+  }
+  return null;
+}
 
 /**
  * Two stacked canvases inside a 16:9 host element:
@@ -118,18 +156,25 @@ export class BoardRenderer {
   private frame() {
     this.raf = 0;
     const strokes = pageStrokes(this.session.state, this.page);
+    const bg = this.session.state.bg?.[this.page];
+    const ink = (s: Stroke) => (bg ? slideInk(s) : s);
     const didCommitted = this.dirtyCommitted;
     const didLive = this.dirtyLive;
     if (this.dirtyCommitted) {
       this.dirtyCommitted = false;
       this.prep(this.cctx);
-      for (const s of strokes) if (s.done) drawStroke(this.cctx, s);
+      // A slide sits behind the writing on its page.
+      if (bg) {
+        const im = slideImage(bg, () => this.invalidate());
+        if (im) this.cctx.drawImage(im, 0, 0, BOARD_W, BOARD_H);
+      }
+      for (const s of strokes) if (s.done) drawStroke(this.cctx, ink(s));
     }
     if (this.dirtyLive) {
       this.dirtyLive = false;
       this.prep(this.lctx);
       const live: Stroke[] = strokes.filter((s) => !s.done);
-      for (const s of live) drawStroke(this.lctx, s);
+      for (const s of live) drawStroke(this.lctx, ink(s));
       this.overlay?.(this.lctx);
     }
     this.onFrame?.(didCommitted, didLive);

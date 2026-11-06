@@ -11,6 +11,7 @@ import type {
   BoardEventBody,
   ChatMessage,
   AudioState,
+  PresentState,
   ClientToServer,
   PersonPublic,
   RosterEntry,
@@ -23,7 +24,9 @@ import { authMode, config, dbEnabled, epoch, mediaEnabled, originAllowed, r2Enab
 import { putObject } from './storage.ts';
 import { mayTeach, userFromRequest, verifyUser } from './auth.ts';
 import { store, type Session } from './store.ts';
-import { mediaParticipants, mediaToken, setSpeak } from './media.ts';
+import { mediaParticipants, mediaToken, setAllow } from './media.ts';
+import { loadSlide, saveSlide } from './slides.ts';
+import { MAX_SLIDES, SLIDE_RE } from '@net360/protocol';
 import { migrate } from './db.ts';
 import { flushAll, persist, restoreLiveSessions, startSnapshots } from './persist.ts';
 import { padKeyFor } from './passes.ts';
@@ -56,9 +59,28 @@ app.get('/api/config', (_req, res) => {
   res.json({ authMode, media: mediaEnabled });
 });
 
+/** Slide images (public, unguessable names; cached forever). */
+app.get('/api/slides/:sid/:file', async (req, res) => {
+  const img = `${req.params.sid}/${req.params.file}`;
+  if (!SLIDE_RE.test(img)) return res.status(404).end();
+  try {
+    const data = await loadSlide(img);
+    if (!data) return res.status(404).end();
+    res.setHeader('Content-Type', 'image/jpeg');
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    // Boards draw slides into canvases (and the 3D room uploads them to the GPU).
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    res.end(data);
+  } catch (e) {
+    console.error('[slides] read failed:', (e as Error).message);
+    res.status(502).end();
+  }
+});
+
 /** What this server can do — lets you confirm a deploy picked up the latest code. */
 const VERSION = (process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.SOURCE_VERSION ?? 'local').slice(0, 7);
-const FEATURES = ['name-code-join', 'live-chat', 'read-receipts', 'class-audio'];
+const FEATURES = ['name-code-join', 'live-chat', 'read-receipts', 'class-audio', 'screen-share', 'slides'];
 app.get('/api/health', (_req, res) =>
   res.json({ ok: true, version: VERSION, features: FEATURES, epoch, db: dbEnabled, r2: r2Enabled, audio: mediaEnabled, auth: authMode }),
 );
@@ -108,7 +130,7 @@ app.post('/api/sessions/:id/media-token', async (req, res) => {
     sessionId: s.info.id,
     identity: user.uid,
     name: user.name,
-    canPublish: user.uid === s.teacherUid,
+    allow: user.uid === s.teacherUid ? { mic: true, screen: true } : { mic: false, screen: false },
     teacher: user.uid === s.teacherUid,
   });
   if (!t) return res.status(503).json({ error: 'Video is not configured on this server.' });
@@ -132,7 +154,7 @@ const io = new Server<ClientToServer, ServerToClient>(http, {
   cors: { origin: (origin, cb) => cb(null, originAllowed(origin)) },
   pingInterval: 10_000,
   pingTimeout: 8_000,
-  maxHttpBufferSize: 256 * 1024,
+  maxHttpBufferSize: 2 * 1024 * 1024, // room for one slide image per message
 });
 
 const TOOLS: Tool[] = ['pen', 'highlighter', 'line', 'arrow', 'rect', 'circle'];
@@ -165,6 +187,8 @@ function validEvent(ev: any): ev is BoardEventBody {
       return true;
     case 'pg':
       return Number.isInteger(ev.pg);
+    case 'sl':
+      return Array.isArray(ev.imgs) && ev.imgs.length >= 1 && ev.imgs.length <= MAX_SLIDES && ev.imgs.every((i: unknown) => typeof i === 'string' && SLIDE_RE.test(i));
     default:
       return false;
   }
@@ -195,13 +219,34 @@ function audioState(s: Session): AudioState {
   return { available: mediaEnabled, open: s.audio.open, allowed: [...s.audio.allowed], blocked: [...s.audio.blocked] };
 }
 const studentMaySpeak = (s: Session, uid: string) => !s.audio.blocked.has(uid) && (s.audio.open || s.audio.allowed.has(uid));
+/** What a student may send in the media room right now. */
+const studentAllow = (s: Session, uid: string) => ({ mic: studentMaySpeak(s, uid), screen: s.present.uid === uid });
 
 /** Speaking rules changed: tell every screen, and apply them in the media room. */
 async function pushAudio(s: Session, changed?: string[]) {
   io.to(room(s)).emit('audio', audioState(s));
+  await applyMedia(s, changed);
+}
+
+/** Apply each student's permissions in the media room. */
+async function applyMedia(s: Session, changed?: string[]) {
   if (!mediaEnabled) return;
   const ids = changed ?? (await mediaParticipants(s.info.id)).filter((id) => s.roster.has(id));
-  await Promise.all(ids.map((id) => setSpeak(s.info.id, id, studentMaySpeak(s, id))));
+  await Promise.all(ids.map((id) => setAllow(s.info.id, id, studentAllow(s, id))));
+}
+
+/** Who may present, as each screen sees it (only the teacher sees requests). */
+function presentState(s: Session, teacher: boolean): PresentState {
+  const uid = s.present.uid;
+  return {
+    presenter: uid,
+    presenterName: uid ? (s.roster.get(uid)?.name ?? null) : null,
+    requests: teacher ? [...s.present.requests].map(([u, name]) => ({ uid: u, name })) : [],
+  };
+}
+function pushPresent(s: Session) {
+  io.to(room(s)).except(teacherRoom(s)).emit('present', presentState(s, false));
+  io.to(teacherRoom(s)).emit('present', presentState(s, true));
 }
 
 /** A hand went up or down. */
@@ -291,22 +336,87 @@ io.on('connection', (socket: Socket<ClientToServer, ServerToClient>) => {
   socket.emit('welcome', { role, me: { uid, name, clientId }, session: s.info, cls: s.cls, canWrite, epoch });
   if (role === 'teacher') socket.emit('roster', rosterList(s));
   if (role === 'student') socket.emit('hand', s.roster.get(uid)!.hand);
-  if (role !== 'board') socket.emit('audio', audioState(s));
+  socket.emit('audio', audioState(s));
+  socket.emit('present', presentState(s, role === 'teacher'));
   pushPresence(s);
 
   // Class audio: the teacher is always heard; students speak when allowed.
   socket.on('mediaJoin', async (ack) => {
     if (typeof ack !== 'function') return;
-    if (role === 'board' || s.ended) return ack({ error: 'Audio is not available here.' });
+    if (s.ended) return ack({ error: 'The class has ended.' });
+    // The classroom screen only watches (shared screens); it never sends anything.
+    const allow = role === 'teacher' ? { mic: true, screen: true } : role === 'board' ? { mic: false, screen: false } : studentAllow(s, uid);
     const t = await mediaToken({
       sessionId: s.info.id,
-      identity: uid,
-      name,
-      canPublish: role === 'teacher' || studentMaySpeak(s, uid),
+      identity: role === 'board' ? `board-${clientId}` : uid,
+      name: role === 'board' ? 'Classroom screen' : name,
+      allow,
       teacher: role === 'teacher',
     }).catch(() => null);
     ack(t ?? { error: 'Class audio is not set up yet.' });
   });
+  // Presenting: students ask; the teacher decides; one student at a time.
+  socket.on('presentAsk', (on) => {
+    if (role !== 'student' || s.ended) return;
+    if (on) {
+      if (s.present.uid === uid) return;
+      s.present.requests.set(uid, name);
+    } else {
+      s.present.requests.delete(uid);
+      if (s.present.uid === uid) {
+        s.present.uid = null;
+        void applyMedia(s, [uid]);
+      }
+    }
+    pushPresent(s);
+  });
+  socket.on('presentSet', (who) => {
+    if (role !== 'teacher') return;
+    const next = who && s.roster.has(String(who)) ? String(who) : null;
+    const prev = s.present.uid;
+    if (prev === next) return;
+    s.present.uid = next;
+    if (next) s.present.requests.delete(next);
+    pushPresent(s);
+    void applyMedia(s, [prev, next].filter((x): x is string => Boolean(x)));
+  });
+  socket.on('presentDecline', (who) => {
+    if (role !== 'teacher') return;
+    const u = String(who ?? '');
+    if (!s.present.requests.delete(u)) return;
+    io.to(userRoom(s, u)).emit('presentDeclined');
+    pushPresent(s);
+  });
+  let slideTimes: number[] = [];
+  socket.on('slideUpload', async (data, ack) => {
+    if (typeof ack !== 'function') return;
+    if (s.ended || !(role === 'teacher' || (role === 'student' && s.present.uid === uid))) return ack({ error: 'Not allowed to present.' });
+    // Binary arrives as a Buffer, an ArrayBuffer or a typed array depending on the encoder.
+    const raw = data as unknown;
+    const buf = Buffer.isBuffer(raw)
+      ? raw
+      : raw instanceof ArrayBuffer
+        ? Buffer.from(raw)
+        : ArrayBuffer.isView(raw)
+          ? Buffer.from(raw.buffer, raw.byteOffset, raw.byteLength)
+          : null;
+    // JPEG only (they're made in the browser), up to 1.5 MB each.
+    if (!buf || buf.length < 100 || buf.length > 1_500_000 || buf[0] !== 0xff || buf[1] !== 0xd8 || buf[2] !== 0xff) return ack({ error: 'That slide image could not be read.' });
+    const now = Date.now();
+    slideTimes = slideTimes.filter((t) => now - t < 60_000);
+    if (slideTimes.length >= 120 || s.slides >= 1000) return ack({ error: 'Too many slides at once. Please wait a moment.' });
+    slideTimes.push(now);
+    s.slides++;
+    const img = `${s.info.id}/${nanoid(16)}.jpg`;
+    try {
+      await saveSlide(img, buf);
+      ack({ img });
+    } catch (e) {
+      console.error('[slides] save failed:', (e as Error).message);
+      ack({ error: 'Could not save that slide. Please try again.' });
+    }
+  });
+
   socket.on('audioOpen', (open) => {
     if (role !== 'teacher') return;
     s.audio.open = Boolean(open);
@@ -346,7 +456,11 @@ io.on('connection', (socket: Socket<ClientToServer, ServerToClient>) => {
   });
 
   socket.on('b', (body) => {
-    if (!canWrite || s.ended || !validEvent(body)) return;
+    if (s.ended || !validEvent(body)) return;
+    // The teacher writes; a student who is presenting may add slides and turn pages.
+    const presenter = role === 'student' && s.present.uid === uid && (body.t === 'pg' || body.t === 'pn' || body.t === 'sl');
+    if (!canWrite && !presenter) return;
+    if (body.t === 'sl' && !body.imgs.every((i) => i.startsWith(`${s.info.id}/`))) return;
     const ev = { ...body, seq: s.board.seq + 1, o: clientId, at: Date.now() } as BoardEvent;
     store.append(s, ev);
     io.to(room(s)).emit('b', ev);

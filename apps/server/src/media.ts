@@ -13,11 +13,21 @@ const admin = mediaEnabled
   ? new RoomServiceClient(config.livekit.url.replace(/^ws/, 'http'), config.livekit.apiKey, config.livekit.apiSecret)
   : null;
 
+/** What someone may send: their microphone, and/or their screen. */
+export interface Allow {
+  mic: boolean;
+  screen: boolean;
+}
+export const sourcesFor = (a: Allow): TrackSource[] => [
+  ...(a.mic ? [TrackSource.MICROPHONE] : []),
+  ...(a.screen ? [TrackSource.SCREEN_SHARE, TrackSource.SCREEN_SHARE_AUDIO] : []),
+];
+
 export async function mediaToken(opts: {
   sessionId: string;
   identity: string;
   name: string;
-  canPublish: boolean;
+  allow: Allow;
   teacher: boolean;
 }): Promise<{ url: string; token: string } | null> {
   if (!mediaEnabled) return null;
@@ -31,8 +41,8 @@ export async function mediaToken(opts: {
     room: roomName(opts.sessionId),
     roomJoin: true,
     canSubscribe: true,
-    canPublish: opts.canPublish,
-    canPublishSources: [TrackSource.MICROPHONE],
+    canPublish: opts.allow.mic || opts.allow.screen,
+    canPublishSources: sourcesFor(opts.allow),
     canPublishData: false,
     canUpdateOwnMetadata: false,
   });
@@ -41,32 +51,36 @@ export async function mediaToken(opts: {
 
 const notInRoom = (e: unknown) => /not found|not exist|404/i.test(String((e as Error)?.message ?? e));
 
-/** Let someone speak, or take it away (their microphone is switched off too). */
-export async function setSpeak(sessionId: string, identity: string, allow: boolean) {
+/** Change what someone may send; anything no longer allowed is switched off at once. */
+export async function setAllow(sessionId: string, identity: string, allow: Allow) {
   if (!admin) return;
   try {
     await admin.updateParticipant(roomName(sessionId), identity, undefined, {
       canSubscribe: true,
-      canPublish: allow,
+      canPublish: allow.mic || allow.screen,
       canPublishData: false,
-      canPublishSources: [TrackSource.MICROPHONE],
+      canPublishSources: sourcesFor(allow),
     });
-    if (!allow) await muteMic(sessionId, identity);
+    const off = [
+      ...(allow.mic ? [] : [TrackSource.MICROPHONE]),
+      ...(allow.screen ? [] : [TrackSource.SCREEN_SHARE, TrackSource.SCREEN_SHARE_AUDIO]),
+    ];
+    if (off.length) await muteSources(sessionId, identity, off);
   } catch (e) {
-    if (!notInRoom(e)) console.error('[audio] permission change failed:', (e as Error).message);
+    if (!notInRoom(e)) console.error('[media] permission change failed:', (e as Error).message);
   }
 }
 
-/** Switch off someone's microphone right now. */
-export async function muteMic(sessionId: string, identity: string) {
+/** Switch off someone's microphone and/or screen share right now. */
+async function muteSources(sessionId: string, identity: string, sources: TrackSource[]) {
   if (!admin) return;
   try {
     const p = await admin.getParticipant(roomName(sessionId), identity);
     for (const t of p.tracks) {
-      if (t.source === TrackSource.MICROPHONE && !t.muted) await admin.mutePublishedTrack(roomName(sessionId), identity, t.sid, true);
+      if (sources.includes(t.source) && !t.muted) await admin.mutePublishedTrack(roomName(sessionId), identity, t.sid, true);
     }
   } catch (e) {
-    if (!notInRoom(e)) console.error('[audio] mute failed:', (e as Error).message);
+    if (!notInRoom(e)) console.error('[media] mute failed:', (e as Error).message);
   }
 }
 

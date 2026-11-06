@@ -49,8 +49,18 @@ export interface StrokeHide { t: 'h'; ids: string[] }
 export interface StrokeShow { t: 'u'; ids: string[] }
 export interface PageNew { t: 'pn' }
 export interface PageGo { t: 'pg'; pg: number }
+/**
+ * Add slides: each image becomes the background of a new page (in order), and the
+ * class moves to the first one. Images are `<sessionId>/<id>.jpg` (see slideUrl).
+ */
+export interface SlidesAdd { t: 'sl'; imgs: string[] }
 
-export type BoardEventBody = StrokeStart | StrokePoints | StrokeEnd | StrokeHide | StrokeShow | PageNew | PageGo;
+export type BoardEventBody = StrokeStart | StrokePoints | StrokeEnd | StrokeHide | StrokeShow | PageNew | PageGo | SlidesAdd;
+
+/** A slide image reference: `<sessionId>/<id>.jpg`. */
+export const SLIDE_RE = /^[A-Za-z0-9_-]{6,40}\/[A-Za-z0-9_-]{6,40}\.jpg$/;
+/** Most slides one deck may add at once. */
+export const MAX_SLIDES = 80;
 
 /** An event as broadcast by the server: body + order + origin. */
 export type BoardEvent = BoardEventBody & {
@@ -85,10 +95,12 @@ export interface BoardState {
   /** Insertion-ordered stroke ids (draw order). */
   order: string[];
   strokes: Record<string, Stroke>;
+  /** Slide shown behind a page's writing (page → image). Missing on older saved boards. */
+  bg?: Record<number, string>;
 }
 
 export function emptyBoard(): BoardState {
-  return { seq: 0, pages: 1, page: 0, order: [], strokes: {} };
+  return { seq: 0, pages: 1, page: 0, order: [], strokes: {}, bg: {} };
 }
 
 /** Result of applying an event: which pages changed and whether only a live stroke grew. */
@@ -164,6 +176,17 @@ export function applyEvent(s: BoardState, ev: BoardEventBody & { seq?: number })
     case 'pg':
       if (ev.pg >= 0 && ev.pg < s.pages) s.page = ev.pg;
       return { structural: true };
+    case 'sl': {
+      if (!ev.imgs.length) return { structural: false };
+      const bg = (s.bg ??= {});
+      // A completely blank board starts the deck on page 1; otherwise slides go after.
+      const blank = s.pages === 1 && !s.order.some((id) => !s.strokes[id]?.hidden) && !bg[0];
+      const first = blank ? 0 : s.pages;
+      ev.imgs.forEach((img, i) => (bg[first + i] = img));
+      s.pages = first + ev.imgs.length;
+      s.page = first;
+      return { structural: true };
+    }
   }
 }
 
@@ -301,6 +324,10 @@ export interface ServerToClient {
   audio: (a: AudioState) => void;
   /** Student: the teacher has just muted you. */
   mutedByTeacher: () => void;
+  /** Who may present right now. */
+  present: (p: PresentState) => void;
+  /** Student: the teacher said not now. */
+  presentDeclined: () => void;
 }
 
 /** Client → server */
@@ -327,6 +354,14 @@ export interface ClientToServer {
   allowSpeak: (msg: { uid: string; allow: boolean }) => void;
   /** Teacher: mute every student at once. */
   muteAll: () => void;
+  /** Student: ask to present (true) or withdraw / stop presenting (false). */
+  presentAsk: (on: boolean) => void;
+  /** Teacher: let a student present, or take it back (null). */
+  presentSet: (uid: string | null) => void;
+  /** Teacher: say not now to a student's request. */
+  presentDecline: (uid: string) => void;
+  /** Upload one slide image (JPEG). Returns its reference for a SlidesAdd event. */
+  slideUpload: (data: Uint8Array, ack: (r: { img: string } | { error: string }) => void) => void;
 }
 
 export interface SocketAuth {
@@ -357,6 +392,18 @@ export interface SocketAuth {
 
 /** How many recent events the server keeps for fast catch-up before sending a snapshot instead. */
 export const TAIL_LIMIT = 5000;
+
+/**
+ * Presenting: the teacher can always share their screen or slides; one student at a
+ * time may present when the teacher allows it.
+ */
+export interface PresentState {
+  /** Student currently allowed to present (null = only the teacher). */
+  presenter: string | null;
+  presenterName: string | null;
+  /** Teacher only: students asking to present. */
+  requests: { uid: string; name: string }[];
+}
 
 /** Six-character join code alphabet (no 0/O/1/I confusion). */
 export const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';

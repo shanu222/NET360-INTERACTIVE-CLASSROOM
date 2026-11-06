@@ -14,6 +14,7 @@ import { codeFor, guestKey, lastName } from '../lib/code.ts';
 import { Navigate } from 'react-router-dom';
 import { ChatPop, ChatThread, useIncoming, useUnread } from '../components/Chat.tsx';
 import { useClassAudio } from '../lib/audio.ts';
+import { AddSlides, ScreenStage, SlideNav, useSlideUpload } from '../components/Present.tsx';
 import { canSpeak } from '@net360/protocol';
 import type { ChatMessage } from '@net360/protocol';
 
@@ -62,6 +63,46 @@ export default function Student() {
     if (sound.micError) flash(sound.micError);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sound.micError]);
+  // Presenting: ask the teacher; once allowed, share a screen or slides.
+  const presenting = Boolean(room.present?.presenter && room.present.presenter === room.welcome?.me.uid);
+  const [asked, setAsked] = useState(false);
+  const slides = useSlideUpload(room.socket, room.board);
+  const wasPresenting = useRef(false);
+  useEffect(() => {
+    if (presenting && !wasPresenting.current) {
+      setAsked(false);
+      flash('Your teacher lets you present');
+    }
+    if (!presenting && wasPresenting.current) {
+      if (sound.sharing) void sound.shareScreen(false);
+      flash('Presenting has ended');
+    }
+    wasPresenting.current = presenting;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [presenting]);
+  useEffect(() => {
+    if (!room.socket) return;
+    const s = room.socket;
+    const no = () => {
+      setAsked(false);
+      flash('Your teacher said not now');
+    };
+    s.on('presentDeclined', no);
+    return () => {
+      s.off('presentDeclined', no);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [room.socket]);
+  useEffect(() => {
+    if (slides.error) flash(slides.error);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slides.error]);
+  const askPresent = (on: boolean) => {
+    room.socket?.emit('presentAsk', on);
+    setAsked(on);
+    if (on) flash('Asked your teacher — waiting…');
+  };
+
   const teacherTalking =
     sound.teacherLive && [...sound.speaking].some((id) => id !== room.welcome?.me.uid && !room.people.some((p) => p.uid === id));
   const me = room.welcome?.me.uid;
@@ -232,6 +273,16 @@ export default function Student() {
             {sound.micOn ? <Icon.mic /> : <Icon.micOff />}
           </button>
         )}
+        {!presenting && (
+          <button
+            className={`fab fab--quiet ${asked ? 'is-on' : ''} ${idle && !menu && !asked ? 'is-idle' : ''}`}
+            aria-label={asked ? 'Cancel your request to present' : 'Ask to present'}
+            title={asked ? 'Waiting for your teacher — click to cancel' : 'Ask to present (share your screen or slides)'}
+            onClick={() => askPresent(!asked)}
+          >
+            <Icon.screen />
+          </button>
+        )}
         <button
           className={`fab fab--quiet fab--chat ${chatOpen ? 'is-on' : ''} ${idle && !menu && !chatOpen && !unread.total ? 'is-idle' : ''}`}
           aria-label="Message your teacher"
@@ -313,6 +364,31 @@ export default function Student() {
         )}
       </AnimatePresence>
 
+      {sound.screen && <ScreenStage screen={sound.screen} />}
+
+      <AnimatePresence>
+        {presenting && (
+          <motion.div className="presbar" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+            <span className="presbar__live" />
+            <strong>You're presenting</strong>
+            {sound.status === 'on' && sound.canShare && (
+              <button
+                className={`btn ${sound.sharing ? 'btn--danger' : 'btn--primary'} btn--sm`}
+                disabled={sound.shareBusy}
+                onClick={() => void sound.shareScreen(!sound.sharing)}
+              >
+                <Icon.screen /> {sound.sharing ? 'Stop sharing' : 'Share screen'}
+              </button>
+            )}
+            <AddSlides upload={slides} />
+            <SlideNav board={room.board} />
+            <button className="btn btn--ghost btn--sm" onClick={() => askPresent(false)}>
+              Done
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {!chatOpen && (
         <ChatPop
           msg={pop}
@@ -326,7 +402,7 @@ export default function Student() {
 
       <AnimatePresence>
         {toast && (
-          <motion.div className="toast" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+          <motion.div className={`toast ${presenting ? 'toast--high' : ''}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
             {toast}
           </motion.div>
         )}

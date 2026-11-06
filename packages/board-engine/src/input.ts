@@ -1,7 +1,7 @@
 import { encodeAbs, pageStrokes, type Stroke, type StrokeStyle, type Tool } from '@net360/protocol';
 import type { BoardSession } from './session.ts';
 import type { BoardRenderer } from './renderer.ts';
-import { isShape, shapePath } from './draw.ts';
+import { isShape, shapePath, slideInk } from './draw.ts';
 
 export interface PenSettings {
   tool: Tool | 'eraser';
@@ -277,7 +277,8 @@ export class PenInput {
     const a = this.active;
     if (a?.shapeStart && a.shapeEnd) {
       ctx.save();
-      ctx.strokeStyle = a.style.c;
+      const onSlide = Boolean(this.session.state.bg?.[this.renderer.page]);
+      ctx.strokeStyle = onSlide ? slideInk({ st: a.style }).st.c : a.style.c;
       ctx.lineWidth = a.style.w;
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';

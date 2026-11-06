@@ -2,6 +2,12 @@
 const P = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.75, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
 
 export const Icon = {
+  screen: () => (<svg viewBox="0 0 24 24" {...P}><rect x="3" y="4" width="18" height="12" rx="2" /><path d="M8 20h8M12 16v4" /></svg>),
+  slides: () => (<svg viewBox="0 0 24 24" {...P}><rect x="3" y="5" width="14" height="10" rx="1.5" /><path d="M7 19h12a2 2 0 002-2V9" /></svg>),
+  shrink: () => (<svg viewBox="0 0 24 24" {...P}><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" /></svg>),
+  expand: () => (<svg viewBox="0 0 24 24" {...P}><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" /></svg>),
+  prev: () => (<svg viewBox="0 0 24 24" {...P}><path d="M15 5l-7 7 7 7" /></svg>),
+  next: () => (<svg viewBox="0 0 24 24" {...P}><path d="M9 5l7 7-7 7" /></svg>),
   mic: () => (<svg viewBox="0 0 24 24" {...P}><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5.5 11a6.5 6.5 0 0013 0M12 17.5V21" /></svg>),
   micOff: () => (<svg viewBox="0 0 24 24" {...P}><path d="M15 9.5V6a3 3 0 00-5.6-1.5M9 9v2a3 3 0 004.6 2.5M5.5 11a6.5 6.5 0 0010.6 5M18.5 11a6.4 6.4 0 01-.5 2.4M12 17.5V21M4 4l16 16" /></svg>),
   speaker: () => (<svg viewBox="0 0 24 24" {...P}><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" /><path d="M15.5 9a4 4 0 010 6M18 6.5a7.5 7.5 0 010 11" /></svg>),
@@ -29,7 +35,6 @@ export const Icon = {
   display: () => (<svg viewBox="0 0 24 24" {...P}><rect x="3" y="4" width="18" height="12" rx="1.5" /><path d="M8 20h8M12 16v4" /></svg>),
   users: () => (<svg viewBox="0 0 24 24" {...P}><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20a6.5 6.5 0 0113 0" /><path d="M16 4.5a3.5 3.5 0 010 7M18 14.5a6.5 6.5 0 013.5 5.5" /></svg>),
   download: () => (<svg viewBox="0 0 24 24" {...P}><path d="M12 4v11m-5-5l5 5 5-5M5 20h14" /></svg>),
-  expand: () => (<svg viewBox="0 0 24 24" {...P}><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" /></svg>),
   scan: () => (<svg viewBox="0 0 24 24" {...P}><path d="M4 8V5a1 1 0 011-1h3M16 4h3a1 1 0 011 1v3M20 16v3a1 1 0 01-1 1h-3M8 20H5a1 1 0 01-1-1v-3M4 12h16" /></svg>),
   rotate: () => (<svg viewBox="0 0 24 24" {...P}><rect x="7" y="3" width="10" height="18" rx="2" /><path d="M20 14a8 8 0 01-5 6.5M18 18l-3 2.5 3.5 1" /></svg>),
   cube: () => (<svg viewBox="0 0 24 24" {...P}><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z" /><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5" /></svg>),

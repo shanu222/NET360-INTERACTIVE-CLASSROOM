@@ -38,7 +38,7 @@ function startServer(): Promise<ChildProcess> {
     p.stdout!.on('data', (d: Buffer) => {
       const line = d.toString();
       process.stdout.write(`  [server] ${line}`);
-      if (line.includes('Classroom server on')) resolve(p);
+      if (/server on :/.test(line)) resolve(p);
     });
   });
 }

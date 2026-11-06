@@ -18,6 +18,7 @@ import { Classroom3D, can3d } from '../lib/webgl.ts';
 import { Lobby } from '../components/Lobby.tsx';
 import { ChatPop, ChatThread, useIncoming, useUnread } from '../components/Chat.tsx';
 import { useClassAudio } from '../lib/audio.ts';
+import { AddSlides, ScreenStage, useSlideUpload } from '../components/Present.tsx';
 import { canSpeak } from '@net360/protocol';
 import type { ChatMessage } from '@net360/protocol';
 
@@ -46,7 +47,7 @@ export default function Teacher() {
   const [input, setInput] = useState<PenInput | null>(null);
   const [hist, setHist] = useState({ undo: false, redo: false });
   const [writing, setWriting] = useState(false);
-  const [panel, setPanel] = useState<'join' | 'class' | 'pen' | 'chat' | null>(() => {
+  const [panel, setPanel] = useState<'join' | 'class' | 'pen' | 'chat' | 'present' | null>(() => {
     // First class on this computer: show how to connect the writing tablet.
     try {
       if (localStorage.getItem('n360.penIntro')) return null;
@@ -161,6 +162,23 @@ export default function Teacher() {
   // Class audio: the teacher speaks to everyone and decides who else may speak.
   const sound = useClassAudio(room.socket, room.audio, Boolean(room.welcome) && room.status !== 'ended' && room.status !== 'error');
   const audioOn = sound.status === 'on';
+  const slides = useSlideUpload(room.socket, room.board);
+  const pres = room.present;
+  const onlineStudents = room.roster.filter((r) => r.online);
+  // A student's request to present pops up for the teacher.
+  const [askPop, setAskPop] = useState<{ uid: string; name: string } | null>(null);
+  const seenAsks = useRef(new Set<string>());
+  useEffect(() => {
+    const reqs = pres?.requests ?? [];
+    const fresh = reqs.find((r) => !seenAsks.current.has(r.uid));
+    seenAsks.current = new Set(reqs.map((r) => r.uid));
+    if (fresh && panel !== 'present') setAskPop(fresh);
+    if (askPop && !reqs.some((r) => r.uid === askPop.uid)) setAskPop(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pres?.requests]);
+  useEffect(() => {
+    if (slides.error) setAudioNote(slides.error);
+  }, [slides.error]);
   const speakers = room.audio ? room.roster.filter((r) => r.online && canSpeak(room.audio!, r.uid)) : [];
   const letSpeak = (uid: string, allow: boolean) => room.socket?.emit('allowSpeak', { uid, allow });
   const [audioNote, setAudioNote] = useState('');
@@ -301,6 +319,11 @@ export default function Teacher() {
               <Icon.micOff /> Mute all
             </button>
           )}
+          {sound.sharing && (
+            <button className="micbtn is-live" onClick={() => void sound.shareScreen(false)} title="Stop sharing your screen">
+              <Icon.screen /> <span>Sharing · Stop</span>
+            </button>
+          )}
           <StatusPill status={room.status} />
           {tablet.seen && (
             <span className="pill pill--ok" title="Writing tablet connected">
@@ -369,6 +392,13 @@ export default function Teacher() {
             </span>
             <span>Chat</span>
           </button>
+          <button className={`rail__btn ${panel === 'present' ? 'is-on' : ''}`} onClick={() => setPanel(panel === 'present' ? null : 'present')} title="Share your screen or slides">
+            <span className={`rail__hand ${pres?.requests.length ? 'is-up' : ''}`}>
+              <Icon.screen />
+              {pres?.requests.length ? <b>{pres.requests.length}</b> : null}
+            </span>
+            <span>Present</span>
+          </button>
           <button className={`rail__btn ${panel === 'pen' ? 'is-on' : ''}`} onClick={() => setPanel(panel === 'pen' ? null : 'pen')} title="Writing tablet">
             <span className={`rail__hand ${tablet.seen ? 'is-ok' : ''}`}>
               <Icon.pen />
@@ -381,6 +411,70 @@ export default function Teacher() {
           </button>
 
           <AnimatePresence>
+            {panel === 'present' && (
+              <motion.div className="panel panel--present" initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 12 }}>
+                <p className="panel__label">Present to the class</p>
+                {sound.status === 'on' && sound.canShare && (
+                  <button
+                    className={`btn ${sound.sharing ? 'btn--danger' : 'btn--primary'} btn--wide`}
+                    disabled={sound.shareBusy}
+                    onClick={() => void sound.shareScreen(!sound.sharing)}
+                  >
+                    <Icon.screen /> {sound.sharing ? 'Stop sharing' : 'Share your screen'}
+                  </button>
+                )}
+                <AddSlides upload={slides} className="btn btn--ghost btn--wide" />
+                <p className="muted small">
+                  Slides become board pages everyone sees, and you can write on them. From PowerPoint or Google Slides, save as PDF first.
+                </p>
+
+                <p className="panel__label panel__label--gap">Students presenting</p>
+                {pres?.presenter ? (
+                  <div className="presenter">
+                    <span className="presenter__dot" />
+                    <span className="presenter__name">{pres.presenterName ?? 'A student'} is presenting</span>
+                    <button className="btn btn--ghost btn--sm" onClick={() => room.socket?.emit('presentSet', null)}>
+                      Stop
+                    </button>
+                  </div>
+                ) : (
+                  <p className="muted small">Only you can present. Let a student present below.</p>
+                )}
+                {pres?.requests.length ? (
+                  <ul className="asks">
+                    {pres.requests.map((r) => (
+                      <li key={r.uid}>
+                        <span>{r.name} asks to present</span>
+                        <button className="btn btn--primary btn--sm" onClick={() => room.socket?.emit('presentSet', r.uid)}>
+                          Allow
+                        </button>
+                        <button className="btn btn--ghost btn--sm" onClick={() => room.socket?.emit('presentDecline', r.uid)}>
+                          Not now
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+                {onlineStudents.length > 0 && (
+                  <label className="pickpresenter">
+                    <span>Let a student present</span>
+                    <select
+                      value=""
+                      onChange={(e) => {
+                        if (e.target.value) room.socket?.emit('presentSet', e.target.value);
+                      }}
+                    >
+                      <option value="">Choose a student…</option>
+                      {onlineStudents.map((r) => (
+                        <option key={r.uid} value={r.uid}>
+                          {r.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+              </motion.div>
+            )}
             {panel === 'pen' && (
               <motion.div className="panel panel--pen" initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 12 }}>
                 <div className={`penstatus ${tablet.seen ? 'is-ok' : ''}`}>
@@ -595,6 +689,42 @@ export default function Teacher() {
         {audioNote && (
           <motion.div className="toast" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
             {audioNote}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {sound.screen && (
+        <ScreenStage
+          screen={sound.screen}
+          onStop={sound.screen.uid === pres?.presenter ? () => room.socket?.emit('presentSet', null) : undefined}
+        />
+      )}
+
+      <AnimatePresence>
+        {askPop && (
+          <motion.div className="askpop" initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+            <Icon.screen />
+            <span>
+              <strong>{askPop.name}</strong> asks to present
+            </span>
+            <button
+              className="btn btn--primary btn--sm"
+              onClick={() => {
+                room.socket?.emit('presentSet', askPop.uid);
+                setAskPop(null);
+              }}
+            >
+              Allow
+            </button>
+            <button
+              className="btn btn--ghost btn--sm"
+              onClick={() => {
+                room.socket?.emit('presentDecline', askPop.uid);
+                setAskPop(null);
+              }}
+            >
+              Not now
+            </button>
           </motion.div>
         )}
       </AnimatePresence>

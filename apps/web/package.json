@@ -15,6 +15,7 @@
     "framer-motion": "^11.11.17",
     "jspdf": "^2.5.2",
     "livekit-client": "^2.23.0",
+    "pdfjs-dist": "^4.10.38",
     "qr-scanner": "^1.4.2",
     "qrcode": "^1.5.4",
     "react": "^18.3.1",

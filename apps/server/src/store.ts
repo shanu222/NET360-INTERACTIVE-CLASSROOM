@@ -33,6 +33,10 @@ export interface Session {
   seen: Map<string, ChatSeen>;
   /** Who may speak (see AudioState). */
   audio: { open: boolean; allowed: Set<string>; blocked: Set<string> };
+  /** Presenting: the student allowed to present (if any) and who's asking. */
+  present: { uid: string | null; requests: Map<string, string> };
+  /** Slide images uploaded in this class. */
+  slides: number;
 }
 
 /**
@@ -61,6 +65,8 @@ class Store {
       chats: [],
       seen: new Map(),
       audio: { open: false, allowed: new Set(), blocked: new Set() },
+      present: { uid: null, requests: new Map() },
+      slides: 0,
     };
     this.byId.set(id, s);
     this.byCode.set(code, id);
@@ -81,6 +87,8 @@ class Store {
       chats: [],
       seen: new Map(),
       audio: { open: false, allowed: new Set(), blocked: new Set() },
+      present: { uid: null, requests: new Map() },
+      slides: 0,
     };
     this.byId.set(s.info.id, s);
     this.byCode.set(s.info.code, s.info.id);

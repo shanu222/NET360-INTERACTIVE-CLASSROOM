@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { io, type ManagerOptions, type Socket, type SocketOptions } from 'socket.io-client';
 import msgpackParser from 'socket.io-msgpack-parser';
 import { BoardSession } from '@net360/board-engine';
-import type { AudioState, ChatMessage, ChatSeen, ClassState, ClientToServer, PersonPublic, RosterEntry, ServerToClient, Welcome } from '@net360/protocol';
+import type { AudioState, ChatMessage, ChatSeen, PresentState, ClassState, ClientToServer, PersonPublic, RosterEntry, ServerToClient, Welcome } from '@net360/protocol';
 import { useAuth } from './auth.tsx';
 import { API_URL } from './env.ts';
 
@@ -24,6 +24,8 @@ export interface Classroom {
   chats: ChatItem[];
   /** Who may speak in class audio. */
   audio: AudioState | null;
+  /** Who may present (share a screen or slides). */
+  present: PresentState | null;
   /** Read receipts, keyed `${by}|${peer}` → time read up to. */
   seen: Record<string, number>;
   /** Who is typing to me right now (uid → until when). */
@@ -65,6 +67,7 @@ export function useClassroom(
   const [chats, setChats] = useState<ChatItem[]>([]);
   const [seen, setSeen] = useState<Record<string, number>>({});
   const [audio, setAudio] = useState<AudioState | null>(null);
+  const [present, setPresent] = useState<PresentState | null>(null);
   const [typing, setTyping] = useState<Record<string, number>>({});
   const sockRef = useRef<Socket<ServerToClient, ClientToServer> | null>(null);
   const meRef = useRef<string>('');
@@ -156,6 +159,7 @@ export function useClassroom(
       }),
     );
     s.on('audio', setAudio);
+    s.on('present', setPresent);
     s.on('typing', (from) => setTyping((t) => ({ ...t, [from]: Date.now() + 3500 })));
     s.on('ended', () => setStatus('ended'));
     s.on('fail', (m) => {
@@ -206,5 +210,5 @@ export function useClassroom(
     };
   }, []);
 
-  return { status, error, welcome, cls, roster, people, hand, chats, audio, seen, typing, ...actions, board, socket };
+  return { status, error, welcome, cls, roster, people, hand, chats, audio, present, seen, typing, ...actions, board, socket };
 }

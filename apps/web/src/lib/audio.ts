@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Socket } from 'socket.io-client';
 import type { AudioState, ClientToServer, ServerToClient } from '@net360/protocol';
-import type { Room } from 'livekit-client';
+import type { RemoteVideoTrack, Room } from 'livekit-client';
 
 export type AudioStatus = 'off' | 'connecting' | 'on' | 'error';
 
@@ -24,7 +24,21 @@ export interface ClassAudio {
   speaking: Set<string>;
   /** The teacher's microphone is live (for students). */
   teacherLive: boolean;
+  /** Someone else's shared screen, if any. */
+  screen: { track: RemoteVideoTrack; uid: string; name: string } | null;
+  /** I'm sharing my screen. */
+  sharing: boolean;
+  shareBusy: boolean;
+  shareScreen: (on: boolean) => Promise<void>;
+  /** This device can share its screen (phones can't). */
+  canShare: boolean;
 }
+
+/** LiveKit's numbers for track sources in permissions. */
+const SRC_MIC = 2;
+const SRC_SCREEN = 3;
+const allows = (perms: { canPublish: boolean; canPublishSources: number[] } | undefined, src: number) =>
+  Boolean(perms?.canPublish) && (!perms!.canPublishSources.length || perms!.canPublishSources.includes(src));
 
 const MIC = { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
 
@@ -36,7 +50,12 @@ export function useClassAudio(
   socket: Socket<ServerToClient, ClientToServer> | null,
   audio: AudioState | null,
   ready: boolean,
+  opts: { watchOnly?: boolean } = {},
 ): ClassAudio {
+  const watchOnly = Boolean(opts.watchOnly);
+  const [screen, setScreen] = useState<ClassAudio['screen']>(null);
+  const [sharing, setSharing] = useState(false);
+  const [shareBusy, setShareBusy] = useState(false);
   const [status, setStatus] = useState<AudioStatus>('off');
   const [needsTap, setNeedsTap] = useState(false);
   const [micOn, setMicOn] = useState(false);
@@ -86,9 +105,28 @@ export function useClassAudio(
         }
         setTeacherLive(live);
       };
+      /** The shared screen to show: any participant's live screen share. */
+      const refreshScreen = () => {
+        let found: ClassAudio['screen'] = null;
+        for (const p of room!.remoteParticipants.values()) {
+          for (const pub of p.videoTrackPublications.values()) {
+            if (pub.source === Track.Source.ScreenShare && pub.track && !pub.isMuted) {
+              found = { track: pub.track as RemoteVideoTrack, uid: p.identity, name: p.name || 'Someone' };
+            }
+          }
+        }
+        setScreen((cur) => (cur?.track === found?.track ? cur : found));
+      };
+      const stopMyShare = () => {
+        const lp = room!.localParticipant;
+        if (lp.isScreenShareEnabled) void lp.setScreenShareEnabled(false).catch(() => undefined);
+        setSharing(false);
+      };
       room
         .on(RoomEvent.TrackSubscribed, (track) => {
-          if (track.kind !== Track.Kind.Audio) return;
+          if (track.kind === Track.Kind.Video) return refreshScreen();
+          // The classroom screen shows shared screens only; sound comes from the room itself.
+          if (track.kind !== Track.Kind.Audio || watchOnly) return;
           const el = track.attach();
           el.muted = !heardRef.current;
           el.style.display = 'none';
@@ -102,21 +140,43 @@ export function useClassAudio(
             el.remove();
           }
           refreshTeacher();
+          refreshScreen();
         })
         .on(RoomEvent.TrackMuted, (pub, p) => {
-          // The teacher muted me from the server.
+          // The teacher switched my microphone or screen off from the server.
           if (p === room!.localParticipant && pub.source === Track.Source.Microphone) setMicOn(false);
+          if (p === room!.localParticipant && pub.source === Track.Source.ScreenShare) stopMyShare();
           refreshTeacher();
+          refreshScreen();
         })
-        .on(RoomEvent.TrackUnmuted, refreshTeacher)
+        .on(RoomEvent.TrackUnmuted, () => {
+          refreshTeacher();
+          refreshScreen();
+        })
         .on(RoomEvent.TrackPublished, refreshTeacher)
-        .on(RoomEvent.TrackUnpublished, refreshTeacher)
+        .on(RoomEvent.TrackUnpublished, () => {
+          refreshTeacher();
+          refreshScreen();
+        })
         .on(RoomEvent.ParticipantConnected, refreshTeacher)
-        .on(RoomEvent.ParticipantDisconnected, refreshTeacher)
-        // The teacher took away the right to speak: the mic is off.
+        .on(RoomEvent.ParticipantDisconnected, () => {
+          refreshTeacher();
+          refreshScreen();
+        })
+        .on(RoomEvent.LocalTrackPublished, (pub) => {
+          if (pub.source === Track.Source.ScreenShare) setSharing(true);
+        })
+        .on(RoomEvent.LocalTrackUnpublished, (pub) => {
+          // Also fires when the browser's own "Stop sharing" button is used.
+          if (pub.source === Track.Source.ScreenShare) setSharing(false);
+        })
+        // The teacher took away the right to speak or present: switch those off.
         .on(RoomEvent.ParticipantPermissionsChanged, (_prev, p) => {
+          if (p !== room!.localParticipant) return;
           const perms = room!.localParticipant.permissions;
-          if (p === room!.localParticipant && perms && perms.canPublish === false) setMicOn(false);
+          if (!perms) return;
+          if (!allows(perms, SRC_MIC)) setMicOn(false);
+          if (!allows(perms, SRC_SCREEN)) stopMyShare();
         })
         .on(RoomEvent.ActiveSpeakersChanged, (ps) => setSpeaking(new Set(ps.map((p) => p.identity))))
         .on(RoomEvent.AudioPlaybackStatusChanged, () => setNeedsTap(!room!.canPlaybackAudio))
@@ -133,6 +193,7 @@ export function useClassAudio(
         setStatus('on');
         setNeedsTap(!room.canPlaybackAudio);
         refreshTeacher();
+        refreshScreen();
       } catch {
         if (!cancelled) setStatus('error');
       }
@@ -145,9 +206,33 @@ export function useClassAudio(
       for (const el of els.current) el.remove();
       els.current.clear();
       setMicOn(false);
+      setSharing(false);
+      setScreen(null);
       setStatus('off');
     };
-  }, [socket, ready, available]);
+  }, [socket, ready, available, watchOnly]);
+
+  const shareScreen = useCallback(async (on: boolean) => {
+    const room = roomRef.current;
+    if (!room) return;
+    setShareBusy(true);
+    try {
+      await room.localParticipant.setScreenShareEnabled(
+        on,
+        { audio: false, contentHint: 'detail', resolution: { width: 1920, height: 1080, frameRate: 15 } },
+        { videoCodec: 'vp8' },
+      );
+      setSharing(room.localParticipant.isScreenShareEnabled);
+    } catch (e) {
+      setSharing(false);
+      const msg = String((e as Error)?.message ?? e);
+      // Closing the browser's "choose what to share" window is not an error.
+      if (!/denied|notallowed|cancel|abort/i.test(msg)) setMicError('Couldn’t share your screen. Please try again.');
+    } finally {
+      setShareBusy(false);
+    }
+  }, []);
+  const canShare = typeof navigator !== 'undefined' && Boolean(navigator.mediaDevices?.getDisplayMedia) && !/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent);
 
   const setMic = useCallback(async (on: boolean) => {
     const room = roomRef.current;
@@ -202,5 +287,5 @@ export function useClassAudio(
     void roomRef.current?.startAudio().then(() => setNeedsTap(false));
   }, []);
 
-  return { status, needsTap, startSound, micOn, micBusy, setMic, micError, heard, setHeard, speaking, teacherLive };
+  return { screen, sharing, shareBusy, shareScreen, canShare, status, needsTap, startSound, micOn, micBusy, setMic, micError, heard, setHeard, speaking, teacherLive };
 }

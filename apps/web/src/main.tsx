@@ -3,6 +3,11 @@ import ReactDOM from 'react-dom/client';
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import './styles.css';
 import { AuthProvider } from './lib/auth.tsx';
+import { setSlideUrl } from '@net360/board-engine';
+import { API_URL } from './lib/env.ts';
+
+// Slide images live on the realtime server.
+setSlideUrl((img) => `${API_URL}/api/slides/${img}`);
 import Home from './pages/Home.tsx';
 import Join from './pages/Join.tsx';
 import Student from './pages/Student.tsx';

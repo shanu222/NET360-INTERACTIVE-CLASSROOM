@@ -11,6 +11,8 @@ import { friendly } from './Student.tsx';
 import { Board } from '../components/Board.tsx';
 import { Code, QR } from '../components/QR.tsx';
 import { Icon } from '../components/Icons.tsx';
+import { useClassAudio } from '../lib/audio.ts';
+import { ScreenStage } from '../components/Present.tsx';
 
 /**
  * The classroom TV / projector. Display only: it follows the teacher and has
@@ -24,6 +26,8 @@ export default function BoardDisplay() {
   const pg = usePageInfo(room.board, renderer);
   const idle = useIdle(2500);
   useWakeLock(room.status === 'live');
+  // The classroom screen shows anyone's shared screen (no sound: the teacher is in the room).
+  const media = useClassAudio(room.socket, room.audio, Boolean(room.welcome) && room.status !== 'ended' && room.status !== 'error', { watchOnly: true });
   const info = room.welcome?.session;
   const present = room.cls?.present ?? 0;
   const showJoin = (room.cls?.showJoin ?? true) && room.status !== 'ended';
@@ -95,6 +99,7 @@ export default function BoardDisplay() {
         </Environment>
       )}
       {title}
+      {media.screen && <ScreenStage screen={media.screen} tv />}
 
       {room.status === 'ended' && <div className="display-end">Class has ended · Thank you for joining</div>}
       {room.status === 'error' && (
