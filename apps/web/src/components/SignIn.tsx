@@ -3,7 +3,7 @@ import { useAuth } from '../lib/auth.tsx';
 
 /** Sign-in card: Google via Firebase in production, a name in local dev mode. */
 export function SignIn({ prompt = 'Sign in to continue' }: { prompt?: string }) {
-  const { mode, signInWithGoogle, signInDev } = useAuth();
+  const { mode, signInWithGoogle, signInDev, authError } = useAuth();
   const [name, setName] = useState(localStorage.getItem('n360.dev.name') ?? '');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
@@ -15,21 +15,18 @@ export function SignIn({ prompt = 'Sign in to continue' }: { prompt?: string }) 
         <button
           className="btn btn--primary btn--wide"
           disabled={busy}
-          onClick={async () => {
-            setBusy(true);
+          onClick={() => {
+            // Called synchronously from the click so the Google popup isn't blocked.
             setErr('');
-            try {
-              await signInWithGoogle();
-            } catch (e) {
-              setErr((e as Error).message);
-            } finally {
-              setBusy(false);
-            }
+            setBusy(true);
+            signInWithGoogle()
+              .catch((e) => setErr((e as Error).message))
+              .finally(() => setBusy(false));
           }}
         >
           Continue with Google
         </button>
-        {err && <p className="form-error">{err}</p>}
+        {(err || authError) && <p className="form-error">{err || authError}</p>}
       </div>
     );
   }

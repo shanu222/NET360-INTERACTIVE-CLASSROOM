@@ -26,6 +26,8 @@ interface AuthCtx {
   /** Credentials for the socket handshake. */
   socketAuth: () => Promise<{ idToken?: string; dev?: { uid: string; name: string } }>;
   signInWithGoogle: () => Promise<void>;
+  /** Error from a redirect sign-in that came back to the page. */
+  authError: string | null;
   signInDev: (name: string) => void;
   signOut: () => Promise<void>;
 }
@@ -43,6 +45,28 @@ const fbConfig = {
 // on the same laptop act as different people; the name is remembered.
 const DEV_UID = 'n360.dev.uid';
 const DEV_NAME = 'n360.dev.name';
+/** Plain-language messages for the Firebase errors people actually hit. */
+export function authMessage(e: unknown): string {
+  const code = (e as { code?: string })?.code ?? '';
+  const host = location.hostname;
+  switch (code) {
+    case 'auth/unauthorized-domain':
+      return `This site (${host}) isn't allowed to sign in yet. In Firebase → Authentication → Settings → Authorized domains, add ${host}.`;
+    case 'auth/operation-not-allowed':
+      return 'Google sign-in is turned off. In Firebase → Authentication → Sign-in method, enable Google.';
+    case 'auth/popup-closed-by-user':
+    case 'auth/cancelled-popup-request':
+      return 'Sign-in was closed before it finished. Try again.';
+    case 'auth/network-request-failed':
+      return 'No connection to Google. Check the internet and try again.';
+    case 'auth/invalid-api-key':
+    case 'auth/api-key-not-valid.-please-pass-a-valid-api-key.':
+      return 'The Firebase API key is wrong. Check VITE_FIREBASE_API_KEY on Vercel and redeploy.';
+    default:
+      return (e as Error)?.message?.replace(/^Firebase:\s*/, '') || 'Sign-in failed. Try again.';
+  }
+}
+
 function readDev(): Identity | null {
   const uid = sessionStorage.getItem(DEV_UID);
   const name = localStorage.getItem(DEV_NAME);
@@ -54,8 +78,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [mode, setMode] = useState<'firebase' | 'dev'>('dev');
   const [media, setMedia] = useState(false);
   const [user, setUser] = useState<Identity | null>(null);
-  const [fb, setFb] = useState<{ app: FirebaseApp; auth: Auth } | null>(null);
+  const [fb, setFb] = useState<{ app: FirebaseApp; auth: Auth; mod: typeof import('firebase/auth') } | null>(null);
   const [fbUser, setFbUser] = useState<FbUser | null>(null);
+  const [authError, setAuthError] = useState<string | null>(null);
 
   useEffect(() => {
     let unsub = () => {};
@@ -75,11 +100,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return;
         }
         const { initializeApp } = await import('firebase/app');
-        const { getAuth, onAuthStateChanged } = await import('firebase/auth');
+        // Load the whole auth module now, so the sign-in button can open the
+        // Google popup synchronously on click (browsers block late popups).
+        const mod = await import('firebase/auth');
         const app = initializeApp(fbConfig);
-        const auth = getAuth(app);
-        setFb({ app, auth });
-        unsub = onAuthStateChanged(auth, (u) => {
+        const auth = mod.getAuth(app);
+        setFb({ app, auth, mod });
+        // Finish a redirect sign-in (fallback path) and surface its errors.
+        mod.getRedirectResult(auth).catch((e) => setAuthError(authMessage(e)));
+        unsub = mod.onAuthStateChanged(auth, (u) => {
           setFbUser(u);
           setUser(u ? { uid: u.uid, name: u.displayName || u.email?.split('@')[0] || 'Student', email: u.email ?? undefined } : null);
           setReady(true);
@@ -92,10 +121,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => unsub();
   }, []);
 
-  const signInWithGoogle = useCallback(async () => {
-    if (!fb) return;
-    const { GoogleAuthProvider, signInWithPopup } = await import('firebase/auth');
-    await signInWithPopup(fb.auth, new GoogleAuthProvider());
+  /**
+   * Must be called directly from a click handler, with nothing awaited before it:
+   * the popup opens synchronously. If the browser still blocks popups (some mobile
+   * browsers and in-app browsers do), fall back to a full-page redirect.
+   */
+  const signInWithGoogle = useCallback((): Promise<void> => {
+    if (!fb) return Promise.reject(new Error('Sign-in is still loading — try again in a moment.'));
+    const provider = new fb.mod.GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: 'select_account' });
+    return fb.mod
+      .signInWithPopup(fb.auth, provider)
+      .then(() => undefined)
+      .catch((e: { code?: string }) => {
+        if (e?.code === 'auth/popup-blocked' || e?.code === 'auth/operation-not-supported-in-environment') {
+          return fb.mod.signInWithRedirect(fb.auth, provider);
+        }
+        throw new Error(authMessage(e));
+      });
   }, [fb]);
 
   const signInDev = useCallback((name: string) => {
@@ -109,10 +152,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = useCallback(async () => {
-    if (fb) {
-      const { signOut: fbSignOut } = await import('firebase/auth');
-      await fbSignOut(fb.auth);
-    }
+    if (fb) await fb.mod.signOut(fb.auth);
     sessionStorage.removeItem(DEV_UID);
     setUser(null);
   }, [fb]);
@@ -130,8 +170,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [socketAuth]);
 
   const value = useMemo(
-    () => ({ ready, mode, media, user, headers, socketAuth, signInWithGoogle, signInDev, signOut }),
-    [ready, mode, media, user, headers, socketAuth, signInWithGoogle, signInDev, signOut],
+    () => ({ ready, mode, media, user, headers, socketAuth, signInWithGoogle, authError, signInDev, signOut }),
+    [ready, mode, media, user, headers, socketAuth, signInWithGoogle, authError, signInDev, signOut],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
