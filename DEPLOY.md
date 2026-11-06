@@ -125,8 +125,10 @@ Add to Railway → Variables, then redeploy:
 
 - **LiveKit Cloud** (recommended): create a free project at cloud.livekit.io, then
   Settings → Keys → create a key. Copy the project URL and the key + secret.
-- **Self-hosted**: run LiveKit on your own server (it needs its own UDP ports and TLS —
-  Railway is not a good fit for the media server itself); point `LIVEKIT_URL` at it.
+- **Self-hosted** (cheapest for regular classes, no minute limits): one small Ubuntu
+  server + a subdomain. Run `deploy/livekit/setup.sh` on it; it prints the three values
+  for Railway. Step-by-step: [deploy/livekit/README.md](deploy/livekit/README.md).
+  (Railway can't host LiveKit itself: it needs its own UDP ports.)
 
 Check: `/api/health` shows `"audio": true`. Until these are set, the audio buttons stay hidden.
 
