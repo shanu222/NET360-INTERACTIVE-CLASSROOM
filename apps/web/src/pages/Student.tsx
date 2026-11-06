@@ -2,18 +2,15 @@ import { Suspense, useState, type ReactNode } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import type { BoardRenderer } from '@net360/board-engine';
-import { useAuth } from '../lib/auth.tsx';
 import { useClassroom } from '../lib/classroom.ts';
 import { useIdle, usePageInfo } from '../lib/hooks.ts';
 import { saveNotesPdf } from '../lib/notes.ts';
 import { Classroom3D, can3d, prefers3d } from '../lib/webgl.ts';
 import { Environment } from '../components/Environment.tsx';
 import { Board } from '../components/Board.tsx';
-import { SignIn } from '../components/SignIn.tsx';
-import { Lobby } from '../components/Lobby.tsx';
 import { Icon } from '../components/Icons.tsx';
 import type { ZoomCommand } from '../three/Classroom3D.tsx';
-import { codeFor } from '../lib/code.ts';
+import { codeFor, guestKey, lastName } from '../lib/code.ts';
 import { Navigate } from 'react-router-dom';
 import { ChatThread, useUnread } from '../components/Chat.tsx';
 
@@ -25,10 +22,10 @@ export default function Student() {
   const { sessionId } = useParams();
   const loc = useLocation();
   const nav = useNavigate();
-  const { ready, user } = useAuth();
-  // Students get in with the class code they entered on the join card.
+  // Students get in with their name and the class code they entered on the join card.
   const code = codeFor(sessionId);
-  const room = useClassroom(sessionId, { enabled: Boolean(user && code), as: 'student', code: code ?? undefined });
+  const [guest] = useState(() => ({ key: guestKey(), name: lastName() }));
+  const room = useClassroom(sessionId, { enabled: Boolean(code && guest.name), as: 'student', code: code ?? undefined, guest });
   const [renderer, setRenderer] = useState<BoardRenderer | null>(null);
   const pg = usePageInfo(room.board, renderer);
   const idle = useIdle(3200);
@@ -36,6 +33,7 @@ export default function Student() {
   const [toast, setToast] = useState('');
   const [hideHint, setHideHint] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
+  const [mates, setMates] = useState(false);
   const me = room.welcome?.me.uid;
   const unread = useUnread(room.chats, me, () => 'teacher', chatOpen ? 'teacher' : null);
   const [in3d, setIn3d] = useState(prefers3d);
@@ -45,24 +43,7 @@ export default function Student() {
   const zoomTo = (t: number) => setZoomCmd((z) => ({ t, n: z.n + 1 }));
   const entering = Boolean((loc.state as { entering?: boolean } | null)?.entering);
 
-  if (!code) return <Navigate to="/join" replace />;
-
-  if (ready && !user) {
-    return (
-      <Lobby>
-        <div className="card">
-          <div className="brand">
-            <span className="brand__mark" />
-            <span>
-              NET360 <em>Classroom</em>
-            </span>
-          </div>
-          <h1 className="card__title">Take your seat</h1>
-          <SignIn prompt="Sign in to enter the classroom." />
-        </div>
-      </Lobby>
-    );
-  }
+  if (!code || !guest.name) return <Navigate to="/join" replace />;
 
   const info = room.welcome?.session;
   const flash = (m: string) => {
@@ -109,7 +90,7 @@ export default function Student() {
 
   const controls = (
     <>
-      <header className={`topline ${idle && !menu ? 'is-idle' : ''}`}>
+      <header className={`topline ${idle && !menu && !mates ? 'is-idle' : ''}`}>
         <span className="topline__title">
           {info ? (
             <>
@@ -121,6 +102,36 @@ export default function Student() {
           )}
         </span>
         <StatusPill status={room.status} />
+        {room.people.length > 0 && (
+          <span className="mates">
+            <button className="topline__btn topline__btn--count" onClick={() => setMates((v) => !v)} aria-label="Who is in class" title="Who is in class">
+              <Icon.users /> {room.people.length}
+            </button>
+            <AnimatePresence>
+              {mates && (
+                <motion.div className="mates__list" initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}>
+                  <p className="panel__label">In class · {room.people.length}</p>
+                  <ul>
+                    {info && (
+                      <li className="mates__teacher">
+                        {info.teacherName} <small>Teacher</small>
+                      </li>
+                    )}
+                    {[...room.people]
+                      .sort((a, b) => a.seat - b.seat)
+                      .map((p) => (
+                        <li key={p.uid}>
+                          {p.name}
+                          {p.uid === room.welcome?.me.uid && <small>You</small>}
+                          {p.hand && <small className="mates__hand">Hand up</small>}
+                        </li>
+                      ))}
+                  </ul>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </span>
+        )}
         {can3d() && (
           <button className="topline__btn" onClick={() => setIn3d((v) => !v)} aria-label={in3d ? 'Show the board only' : 'Show the classroom'} title={in3d ? 'Board only' : 'Classroom view'}>
             {in3d ? <Icon.board /> : <Icon.cube />}
@@ -285,6 +296,8 @@ export default function Student() {
 /** Turn server messages into wording students understand. */
 export function friendly(msg: string | null): string {
   if (!msg) return 'Please try again in a moment.';
+  if (/wrong class code|class code/i.test(msg)) return 'That code doesn’t match this class. Use the code your teacher shared.';
+  if (/your name|join again/i.test(msg)) return 'Please enter your name and the class code again.';
   if (/sign in/i.test(msg)) return 'Please sign in again to rejoin your class.';
   if (/ended|not exist/i.test(msg)) return 'This class has ended or the code is no longer active.';
   if (/board link/i.test(msg)) return 'This board link has expired. Open it again from the teacher’s screen.';

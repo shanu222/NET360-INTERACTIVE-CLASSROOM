@@ -298,6 +298,12 @@ export interface SocketAuth {
    * with the teacher's own account (so one person can try both sides).
    */
   as?: 'teacher' | 'student';
+  /**
+   * A student joining with just a name and the class code (no sign-in).
+   * `key` is a random secret kept on the student's device so they get the same
+   * seat and chat back after a reload; the server never reveals it.
+   */
+  guest?: { key: string; name: string };
   /** The class code the student entered (required for students). */
   code?: string;
   /** Writing-pad key (teacher's phone or iPad used as a pen surface). */

@@ -65,7 +65,30 @@ const t2 = join({ sessionId: session.id, dev: devT });
 await sleep(600);
 check(t2.history()?.length === 3, 'teacher gets every conversation back after reloading');
 
-for (const c of [teacher, sara, ali2, t2]) c.sock.disconnect();
+// Students joining with just their name and the teacher's code (no sign-in).
+const tryJoin = (auth: Record<string, unknown>) =>
+  new Promise<string>((res) => {
+    const c = io(URL_, { parser: msgpackParser, transports: ['websocket'], reconnection: false, auth: { sessionId: session.id, clientId: Math.random().toString(36).slice(2), ...auth } });
+    c.on('connect', () => { c.disconnect(); res('joined'); });
+    c.on('connect_error', (e) => res(e.message));
+  });
+const key = 'k'.repeat(10) + Math.random().toString(36).slice(2, 12);
+check((await tryJoin({ code: 'WRONG1', guest: { key, name: 'Hira Shah' } })) === 'Wrong class code.', 'a wrong code is refused');
+check((await tryJoin({ guest: { key, name: 'Hira Shah' } })) === 'Wrong class code.', 'no code is refused');
+check((await tryJoin({ code: session.code, guest: { key, name: ' ' } })) === 'Please enter your name.', 'a missing name is refused');
+const rosters: { name: string; online: boolean }[][] = [];
+t2.sock.on('roster', (r: { name: string; online: boolean }[]) => rosters.push(r));
+const people: { name: string }[][] = [];
+sara.sock.on('people', (p: { name: string }[]) => people.push(p));
+const hira = join({ sessionId: session.id, code: session.code.toLowerCase(), guest: { key, name: 'Hira Shah' } });
+await sleep(700);
+check(Boolean(rosters.at(-1)?.some((r) => r.name === 'Hira Shah' && r.online)), 'the teacher sees Hira join with name + code');
+check(Boolean(people.at(-1)?.some((p) => p.name === 'Hira Shah')), 'classmates see Hira in the room');
+hira.sock.emit('chat', { text: 'Salam sir' });
+await sleep(400);
+check(t2.got.some((m) => m.text === 'Salam sir' && m.fromName === 'Hira Shah'), 'a name + code student can message the teacher');
+
+for (const c of [teacher, sara, ali2, t2, hira]) c.sock.disconnect();
 console.log(failed ? `\n${failed} check(s) failed` : '\nChat works.');
 process.exit(failed ? 1 : 0);
 }

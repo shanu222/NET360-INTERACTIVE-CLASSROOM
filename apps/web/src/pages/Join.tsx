@@ -4,11 +4,9 @@ import { AnimatePresence, motion } from 'framer-motion';
 import type { SessionInfo } from '@net360/protocol';
 import { CODE_ALPHABET } from '@net360/protocol';
 import { api } from '../lib/api.ts';
-import { useAuth } from '../lib/auth.tsx';
-import { SignIn } from '../components/SignIn.tsx';
 import { Icon } from '../components/Icons.tsx';
 import { Lobby } from '../components/Lobby.tsx';
-import { rememberCode } from '../lib/code.ts';
+import { lastName, rememberCode, rememberName } from '../lib/code.ts';
 
 /** Pull a class code from a scanned join URL or a typed code. */
 function codeFrom(text: string): string | null {
@@ -25,12 +23,13 @@ function codeFrom(text: string): string | null {
 export default function Join() {
   const [params] = useSearchParams();
   const nav = useNavigate();
-  const { ready, user } = useAuth();
   const [code, setCode] = useState(params.get('code')?.toUpperCase() ?? '');
   const [scanning, setScanning] = useState(params.get('scan') === '1' && !params.get('code'));
   const [found, setFound] = useState<{ session: SessionInfo; present: number } | null>(null);
   const [err, setErr] = useState('');
   const [entering, setEntering] = useState(false);
+  const [name, setName] = useState(lastName);
+  const cleanName = name.replace(/\s+/g, ' ').trim();
   const video = useRef<HTMLVideoElement>(null);
 
 
@@ -71,22 +70,10 @@ export default function Join() {
     };
   }, [scanning]);
 
-  // Signed in on this card? Go straight in — no extra tap.
-  const signedOutHere = useRef(false);
-  useEffect(() => {
-    if (ready && !user) signedOutHere.current = true;
-    if (sessionStorage.getItem('n360.signingIn')) signedOutHere.current = true;
-    if (user && found && signedOutHere.current && !entering) {
-      signedOutHere.current = false;
-      sessionStorage.removeItem('n360.signingIn');
-      enter();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, user, found]);
-
   const enter = () => {
-    if (!found) return;
+    if (!found || cleanName.length < 2) return;
     rememberCode(found.session.id, found.session.code);
+    rememberName(cleanName.slice(0, 40));
     setEntering(true);
     setTimeout(() => nav(`/class/${found.session.id}`, { state: { entering: true } }), 520);
   };
@@ -137,18 +124,30 @@ export default function Join() {
                     <small>{n === 0 ? 'Be the first to join' : `${n} ${n === 1 ? 'student is' : 'students are'} in class`}</small>
                   </span>
                 </div>
-                {!ready ? (
-                  <div className="card__loading" />
-                ) : user ? (
-                  <>
-                    <button className="btn btn--primary btn--wide" onClick={enter} autoFocus>
-                      Enter classroom
-                    </button>
-                    <p className="signin__note">Joining as {user.name}</p>
-                  </>
-                ) : (
-                  <SignIn prompt="Sign in with Google to take your seat." />
-                )}
+                <form
+                  className="stack"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    enter();
+                  }}
+                >
+                  <label className="field">
+                    <span>Your name</span>
+                    <input
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="e.g. Ayesha Khan"
+                      maxLength={40}
+                      autoComplete="name"
+                      autoCapitalize="words"
+                      autoFocus
+                      aria-label="Your name"
+                    />
+                  </label>
+                  <button className="btn btn--primary btn--wide" disabled={cleanName.length < 2}>
+                    Enter classroom
+                  </button>
+                </form>
                 <button className="link" onClick={() => setCode('')}>
                   Not this class?
                 </button>

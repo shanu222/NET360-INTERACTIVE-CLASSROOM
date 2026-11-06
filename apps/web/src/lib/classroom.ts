@@ -30,7 +30,7 @@ export interface Classroom {
  */
 export function useClassroom(
   sessionId: string | undefined,
-  opts: { boardKey?: string; padKey?: string; code?: string; enabled?: boolean; as?: 'teacher' | 'student' } = {},
+  opts: { boardKey?: string; padKey?: string; code?: string; enabled?: boolean; as?: 'teacher' | 'student'; guest?: { key: string; name: string } } = {},
 ): Classroom {
   const { socketAuth } = useAuth();
   const authRef = useRef(socketAuth);
@@ -57,6 +57,8 @@ export function useClassroom(
       reconnectionDelayMax: 3000,
       // A function, so a fresh Firebase token is used on every reconnect.
       auth: (cb) => {
+        // Students joining with name + code need no sign-in token.
+        if (opts.guest) return cb({ sessionId, clientId, code: opts.code, as: 'student', guest: opts.guest });
         authRef
           .current()
           .then((a) => cb({ sessionId, clientId, boardKey: opts.boardKey, padKey: opts.padKey, code: opts.code, as: opts.as, ...a }))
@@ -114,7 +116,7 @@ export function useClassroom(
       s.disconnect();
       setSocket(null);
     };
-  }, [sessionId, enabled, opts.boardKey, opts.padKey, opts.code, board, clientId]);
+  }, [sessionId, enabled, opts.boardKey, opts.padKey, opts.code, opts.guest?.key, opts.guest?.name, board, clientId]);
 
   return { status, error, welcome, cls, roster, people, hand, chats, board, socket };
 }

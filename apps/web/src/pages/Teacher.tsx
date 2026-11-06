@@ -92,7 +92,10 @@ export default function Teacher() {
   const canWrite = room.welcome?.canWrite ?? false;
   useEffect(() => {
     if (!renderer || !canWrite || mode !== 'board') return;
-    const host = renderer.live.parentElement!;
+    // Right after switching from the 3D room, the 3D board's renderer may still be
+    // current for a moment; wait for the flat board's own renderer.
+    const host = renderer.live.parentElement;
+    if (!host || !host.isConnected) return;
     const pi = new PenInput(host, room.board, renderer, () => penRef.current);
     pi.onHistory = (u, r) => setHist({ undo: u, redo: r });
     setInput(pi);
@@ -168,6 +171,24 @@ export default function Teacher() {
     setThread(uid);
     setPanel('chat');
   };
+
+  // "Ali Khan joined" — a quiet notice as each student takes a seat.
+  const [joined, setJoined] = useState<string[]>([]);
+  const seenRef = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    const online = room.roster.filter((r) => r.online);
+    if (!seenRef.current) {
+      if (room.welcome) seenRef.current = new Set(online.map((r) => r.uid));
+      return;
+    }
+    const fresh = online.filter((r) => !seenRef.current!.has(r.uid));
+    for (const r of online) seenRef.current.add(r.uid);
+    if (!fresh.length) return;
+    const names = fresh.map((r) => r.name);
+    setJoined((j) => [...j, ...names].slice(-3));
+    const t = window.setTimeout(() => setJoined((j) => j.slice(names.length)), 4000);
+    return () => clearTimeout(t);
+  }, [room.roster, room.welcome]);
 
   const hands = useMemo(
     () => room.roster.filter((r) => r.hand && r.online).sort((a, b) => (a.handAt ?? 0) - (b.handAt ?? 0)),
@@ -473,6 +494,16 @@ export default function Teacher() {
           </div>
         </div>
       )}
+
+      <div className="joined" aria-live="polite">
+        <AnimatePresence>
+          {joined.map((n, i) => (
+            <motion.div key={`${n}-${i}`} className="joined__item" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+              <span className="joined__dot" /> <strong>{n}</strong> joined the class
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
 
       {confirmEnd && (
         <div className="veil" onClick={() => setConfirmEnd(false)}>

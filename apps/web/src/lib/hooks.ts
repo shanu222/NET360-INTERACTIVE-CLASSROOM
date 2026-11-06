@@ -13,10 +13,11 @@ export function useIdle(ms = 3000) {
       t = window.setTimeout(() => setIdle(true), ms);
     };
     const evs = ['pointermove', 'pointerdown', 'keydown', 'touchstart'] as const;
-    evs.forEach((e) => window.addEventListener(e, wake, { passive: true }));
+    // Capture phase: the 3D room handles pointer events itself and may not let them bubble.
+    evs.forEach((e) => window.addEventListener(e, wake, { passive: true, capture: true }));
     return () => {
       clearTimeout(t);
-      evs.forEach((e) => window.removeEventListener(e, wake));
+      evs.forEach((e) => window.removeEventListener(e, wake, { capture: true }));
     };
   }, [ms]);
   return idle;

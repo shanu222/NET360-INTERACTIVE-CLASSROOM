@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import express from 'express';
 import { createServer } from 'node:http';
 import { existsSync } from 'node:fs';
@@ -220,6 +221,17 @@ io.use(async (socket, next) => {
     Object.assign(data, { role: 'teacher', uid: s.teacherUid, name: s.info.teacherName });
     return next();
   }
+  // Students join with their name and the code the teacher shared — no sign-in.
+  if (auth.guest) {
+    if (String(auth.code ?? '').trim().toUpperCase() !== s.info.code) return next(new Error('Wrong class code.'));
+    const key = String(auth.guest.key ?? '');
+    const name = String(auth.guest.name ?? '').replace(/\s+/g, ' ').trim().slice(0, 40);
+    if (key.length < 16 || key.length > 64) return next(new Error('Please join again.'));
+    if (name.length < 2) return next(new Error('Please enter your name.'));
+    const uid = `g:${createHash('sha256').update(`${s.info.id}:${key}`).digest('base64url').slice(0, 22)}`;
+    Object.assign(data, { role: 'student', uid, name });
+    return next();
+  }
   const user = await verifyUser(auth.idToken, auth.dev);
   if (!user) return next(new Error('Please sign in to join the class.'));
   const isTeacher = user.uid === s.teacherUid && auth.as !== 'student';
@@ -248,6 +260,7 @@ io.on('connection', (socket: Socket<ClientToServer, ServerToClient>) => {
     if (r) {
       r.online = true;
       r.sockets++;
+      r.name = name; // a student may fix their name when rejoining
     } else {
       s.roster.set(uid, { uid, name, online: true, hand: false, joinedAt: Date.now(), seat: s.roster.size, sockets: 1 });
     }
