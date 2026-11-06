@@ -12,8 +12,12 @@ export const config = {
     /** Optional service-account JSON (only needed for Firestore/Admin features beyond token checks). */
     serviceAccountJson: env.FIREBASE_SERVICE_ACCOUNT ?? '',
   },
-  /** Comma-separated emails allowed to start classes. Empty = any signed-in user. */
-  teacherEmails: (env.TEACHER_EMAILS ?? '')
+  /**
+   * Comma-separated Google accounts allowed to start classes and teach. With Firebase
+   * sign-in on and nothing set, only the NET360 admin account may teach. (Local dev
+   * without Firebase lets anyone teach.)
+   */
+  teacherEmails: (env.TEACHER_EMAILS || (env.FIREBASE_PROJECT_ID ? 'shahnawaz9974balouch@gmail.com' : ''))
     .split(',')
     .map((s) => s.trim().toLowerCase())
     .filter(Boolean),

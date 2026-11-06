@@ -216,6 +216,18 @@ export interface RosterEntry {
 
 export interface Me { uid: string; name: string; clientId: string }
 
+/** A private message between the teacher and one student. */
+export interface ChatMessage {
+  id: string;
+  /** Sender uid. */
+  from: string;
+  fromName: string;
+  /** Receiver uid (the teacher's uid, or a student's). */
+  to: string;
+  text: string;
+  at: number;
+}
+
 /** What every screen knows about the people in class (for the 3D room). */
 export interface PersonPublic {
   uid: string;
@@ -253,6 +265,10 @@ export interface ServerToClient {
   hand: (up: boolean) => void;
   ended: () => void;
   fail: (msg: string) => void;
+  /** A private message for this user (teacher: any student's; student: their own thread). */
+  chat: (m: ChatMessage) => void;
+  /** Earlier messages, sent once after connecting. */
+  chatHistory: (m: ChatMessage[]) => void;
 }
 
 /** Client → server */
@@ -265,6 +281,8 @@ export interface ClientToServer {
   /** Teacher: update class state. */
   cls: (patch: Partial<Pick<ClassState, 'showJoin'>>) => void;
   end: () => void;
+  /** Students write to the teacher; the teacher writes to one student (`to`). */
+  chat: (msg: { to?: string; text: string }) => void;
 }
 
 export interface SocketAuth {

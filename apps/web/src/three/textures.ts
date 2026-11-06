@@ -346,6 +346,155 @@ export function paintingAbstract(): Texture {
   return tex(c);
 }
 
+/** A night sky over hills, with the Milky Way. */
+export function paintingNight(): Texture {
+  const W = 800, H = 1000;
+  const [c, ctx] = make(W, H);
+  const sky = ctx.createLinearGradient(0, 0, 0, H);
+  sky.addColorStop(0, '#0d1630');
+  sky.addColorStop(0.55, '#1f2d55');
+  sky.addColorStop(0.8, '#4a4a6e');
+  sky.addColorStop(1, '#2a2638');
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, W, H);
+  const r = rng(61);
+  // the Milky Way band
+  ctx.save();
+  ctx.translate(W * 0.5, H * 0.45);
+  ctx.rotate(-0.55);
+  for (let i = 0; i < 2600; i++) {
+    const x = (r() - 0.5) * W * 1.6;
+    const y = (r() + r() + r() - 1.5) * 70;
+    ctx.fillStyle = `rgba(${220 + r() * 35},${210 + r() * 40},${255},${r() * 0.5})`;
+    ctx.fillRect(x, y, 1.6, 1.6);
+  }
+  const band = ctx.createLinearGradient(0, -110, 0, 110);
+  band.addColorStop(0, 'rgba(180,170,230,0)');
+  band.addColorStop(0.5, 'rgba(210,190,240,0.18)');
+  band.addColorStop(1, 'rgba(180,170,230,0)');
+  ctx.fillStyle = band;
+  ctx.fillRect(-W, -110, W * 2, 220);
+  ctx.restore();
+  for (let i = 0; i < 700; i++) {
+    const b = r();
+    ctx.fillStyle = `rgba(255,250,235,${0.3 + b * 0.7})`;
+    ctx.beginPath();
+    ctx.arc(r() * W, r() * H * 0.78, b * 1.8, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ridge(ctx, W, H * 0.8, 30, 4, '#1b1a26', H);
+  ridge(ctx, W, H * 0.88, 18, 8, '#100f17', H);
+  brushwork(ctx, W, H, 5000, 7, 63);
+  return tex(c);
+}
+
+/** Saturn rising over a pale desert — a calm, imagined planetscape. */
+export function paintingPlanet(): Texture {
+  const W = 900, H = 640;
+  const [c, ctx] = make(W, H);
+  const sky = ctx.createLinearGradient(0, 0, 0, H);
+  sky.addColorStop(0, '#2b3557');
+  sky.addColorStop(0.6, '#c78f6b');
+  sky.addColorStop(1, '#e8c39a');
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, W, H);
+  // planet with rings
+  const px = W * 0.66, py = H * 0.38;
+  ctx.save();
+  ctx.translate(px, py);
+  ctx.rotate(-0.35);
+  ctx.strokeStyle = 'rgba(240,215,170,0.75)';
+  ctx.lineWidth = 9;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 190, 46, 0, Math.PI, Math.PI * 2);
+  ctx.stroke();
+  const pg = ctx.createRadialGradient(-30, -30, 10, 0, 0, 110);
+  pg.addColorStop(0, '#f4ddb0');
+  pg.addColorStop(1, '#b4825a');
+  ctx.fillStyle = pg;
+  ctx.beginPath();
+  ctx.arc(0, 0, 105, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 190, 46, 0, 0, Math.PI);
+  ctx.stroke();
+  ctx.restore();
+  ridge(ctx, W, H * 0.7, 22, 21, '#c9a07a', H);
+  ridge(ctx, W, H * 0.8, 14, 25, '#a8805c', H);
+  brushwork(ctx, W, H, 8000, 9, 67);
+  return tex(c);
+}
+
+/* ------------------------------------------------------------------ */
+/* Quotes                                                              */
+/* ------------------------------------------------------------------ */
+
+/** Break text into lines that fit `width`. */
+function wrap(ctx: Ctx, text: string, width: number): string[] {
+  const words = text.split(' ');
+  const lines: string[] = [];
+  let line = '';
+  for (const w of words) {
+    const test = line ? `${line} ${w}` : w;
+    if (ctx.measureText(test).width > width && line) {
+      lines.push(line);
+      line = w;
+    } else line = test;
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+
+/** A framed quotation from a scientist, set like a print on ivory paper. */
+export function quotePlate(quote: string, author: string, note: string): Texture {
+  const W = 600, H = 780;
+  const [c, ctx] = paper(W, H);
+  ctx.fillStyle = 'rgba(201,154,63,0.85)';
+  ctx.font = 'italic 400 150px Fraunces, Georgia, serif';
+  ctx.textAlign = 'left';
+  ctx.fillText('“', 56, 190);
+  ctx.fillStyle = '#2a2119';
+  let size = 46;
+  let lines: string[] = [];
+  for (; size >= 30; size -= 2) {
+    ctx.font = `italic 400 ${size}px Fraunces, Georgia, serif`;
+    lines = wrap(ctx, quote, W - 130);
+    if (lines.length * size * 1.3 < H - 330) break;
+  }
+  const top = 230;
+  lines.forEach((l, i) => ctx.fillText(l, 66, top + i * size * 1.3));
+  const y = top + lines.length * size * 1.3 + 40;
+  ctx.fillStyle = 'rgba(201,154,63,0.9)';
+  ctx.fillRect(66, y - 6, 60, 3);
+  ctx.fillStyle = '#2a2119';
+  ctx.font = '600 30px Inter, system-ui, sans-serif';
+  ctx.fillText(author, 66, y + 40);
+  ctx.fillStyle = '#6b5d4f';
+  ctx.font = '400 22px Inter, system-ui, sans-serif';
+  ctx.fillText(note, 66, y + 76);
+  return tex(c);
+}
+
+/** Lettering painted across a wall. */
+export function inscription(text: string, author: string): Texture {
+  const W = 2400, H = 260;
+  const [c, ctx] = make(W, H);
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = 'rgba(58,44,32,0.88)';
+  ctx.textAlign = 'center';
+  ctx.font = 'italic 400 104px Fraunces, Georgia, serif';
+  ctx.fillText(text, W / 2, 130, W - 80);
+  ctx.font = '500 40px Inter, system-ui, sans-serif';
+  ctx.letterSpacing = '10px';
+  ctx.fillStyle = 'rgba(122,90,61,0.9)';
+  ctx.fillText(author.toUpperCase(), W / 2, 215);
+  ctx.letterSpacing = '0px';
+  const t = new CanvasTexture(c);
+  t.colorSpace = SRGBColorSpace;
+  t.anisotropy = 8;
+  return t;
+}
+
 /* ------------------------------------------------------------------ */
 /* Scientific plates — engraved line art on ivory                      */
 /* ------------------------------------------------------------------ */
@@ -534,6 +683,28 @@ export function nameTag(text: string, accent = false): { texture: Texture; aspec
   }
   const t = tex(c);
   return { texture: t, aspect: W / H };
+}
+
+/** A folded name card for a desk (one face). */
+export function deskCard(name: string): Texture {
+  const W = 512, H = 160;
+  const [c, ctx] = make(W, H);
+  ctx.fillStyle = '#f6f0e4';
+  ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = '#c99a3f';
+  ctx.fillRect(0, H - 10, W, 10);
+  ctx.fillStyle = '#1e1a16';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  let size = 64;
+  ctx.font = `600 ${size}px Fraunces, Georgia, serif`;
+  while (ctx.measureText(name).width > W - 40 && size > 30) {
+    size -= 4;
+    ctx.font = `600 ${size}px Fraunces, Georgia, serif`;
+  }
+  ctx.fillText(name, W / 2, H / 2 - 4, W - 30);
+  const t = tex(c);
+  return t;
 }
 
 /** Wall clock face. */

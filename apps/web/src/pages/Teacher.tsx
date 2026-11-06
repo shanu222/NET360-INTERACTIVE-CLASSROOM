@@ -16,6 +16,7 @@ import { Icon } from '../components/Icons.tsx';
 import { StatusPill, friendly } from './Student.tsx';
 import { Classroom3D, can3d } from '../lib/webgl.ts';
 import { Lobby } from '../components/Lobby.tsx';
+import { ChatThread, useUnread } from '../components/Chat.tsx';
 
 const KEY_TOOLS: Record<string, PenSettings['tool']> = { p: 'pen', h: 'highlighter', e: 'eraser', l: 'line', a: 'arrow', r: 'rect', c: 'circle' };
 const KEY_COLORS = [INK.chalk, INK.amber, INK.sky, INK.mint, INK.coral];
@@ -42,7 +43,18 @@ export default function Teacher() {
   const [input, setInput] = useState<PenInput | null>(null);
   const [hist, setHist] = useState({ undo: false, redo: false });
   const [writing, setWriting] = useState(false);
-  const [panel, setPanel] = useState<'join' | 'class' | 'pen' | null>(null);
+  const [panel, setPanel] = useState<'join' | 'class' | 'pen' | 'chat' | null>(() => {
+    // First class on this computer: show how to connect the writing tablet.
+    try {
+      if (localStorage.getItem('n360.penIntro')) return null;
+      localStorage.setItem('n360.penIntro', '1');
+      return 'pen';
+    } catch {
+      return null;
+    }
+  });
+  // The student whose conversation is open in the Chat panel.
+  const [thread, setThread] = useState<string | null>(null);
   // 'room': the 3D classroom, writing straight onto its board · 'board': the large flat board
   const [mode, setMode] = useState<'room' | 'board'>(() => (can3d() ? 'room' : 'board'));
   // Walking around the 3D classroom (writing pauses while walking).
@@ -137,6 +149,25 @@ export default function Teacher() {
     return () => window.removeEventListener('keydown', onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [input, pg.live, pg.pages, walking]);
+
+  const me = room.welcome?.me.uid;
+  const otherOf = (m: { from: string; to: string }) => (m.from === me ? m.to : m.from);
+  const unread = useUnread(room.chats, me, otherOf, panel === 'chat' ? thread : null);
+  const threads = useMemo(() => {
+    // Everyone in class, plus anyone who wrote and has since left; latest message first.
+    const last = new Map<string, number>();
+    for (const m of room.chats) last.set(otherOf(m), m.at);
+    const names = new Map(room.roster.map((r) => [r.uid, r.name]));
+    for (const m of room.chats) if (m.from !== me && !names.has(m.from)) names.set(m.from, m.fromName);
+    return [...names.entries()]
+      .map(([uid, name]) => ({ uid, name, online: room.roster.find((r) => r.uid === uid)?.online ?? false, at: last.get(uid) ?? 0 }))
+      .sort((a, b) => b.at - a.at || Number(b.online) - Number(a.online) || a.name.localeCompare(b.name));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [room.chats, room.roster, me]);
+  const chatWith = (uid: string) => {
+    setThread(uid);
+    setPanel('chat');
+  };
 
   const hands = useMemo(
     () => room.roster.filter((r) => r.hand && r.online).sort((a, b) => (a.handAt ?? 0) - (b.handAt ?? 0)),
@@ -266,6 +297,13 @@ export default function Teacher() {
             </span>
             <span>Class</span>
           </button>
+          <button className={`rail__btn ${panel === 'chat' ? 'is-on' : ''}`} onClick={() => setPanel(panel === 'chat' ? null : 'chat')} title="Message students">
+            <span className={`rail__hand ${unread.total ? 'is-up' : ''}`}>
+              <Icon.chat />
+              {unread.total > 0 && <b>{unread.total}</b>}
+            </span>
+            <span>Chat</span>
+          </button>
           <button className={`rail__btn ${panel === 'pen' ? 'is-on' : ''}`} onClick={() => setPanel(panel === 'pen' ? null : 'pen')} title="Writing tablet">
             <span className={`rail__hand ${tablet.seen ? 'is-ok' : ''}`}>
               <Icon.pen />
@@ -314,6 +352,50 @@ export default function Teacher() {
                 <p className="small">Write with the mouse, a touchscreen, or a laptop pen right on the board.</p>
               </motion.div>
             )}
+            {panel === 'chat' && (
+              <motion.div className="panel panel--chat" initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 12 }}>
+                {thread ? (
+                  <>
+                    <div className="drawer__head">
+                      <button aria-label="All students" onClick={() => setThread(null)}>
+                        <Icon.left />
+                      </button>
+                      <span>
+                        <strong>{threads.find((t) => t.uid === thread)?.name ?? 'Student'}</strong>
+                        <small>{threads.find((t) => t.uid === thread)?.online ? 'In class' : 'Left the class'}</small>
+                      </span>
+                    </div>
+                    <ChatThread
+                      messages={room.chats.filter((m) => otherOf(m) === thread)}
+                      me={me}
+                      placeholder="Write a private message…"
+                      empty="Only this student will see your message."
+                      autoFocus
+                      onSend={(text) => room.socket?.emit('chat', { to: thread, text })}
+                    />
+                  </>
+                ) : (
+                  <>
+                    <p className="panel__label">Message a student</p>
+                    {threads.length === 0 ? (
+                      <p className="muted small">Students appear here as they join.</p>
+                    ) : (
+                      <ul className="threads">
+                        {threads.map((t) => (
+                          <li key={t.uid}>
+                            <button onClick={() => setThread(t.uid)}>
+                              <span className={`threads__dot ${t.online ? 'is-on' : ''}`} />
+                              <span className="threads__name">{t.name}</span>
+                              {unread.by[t.uid] ? <b>{unread.by[t.uid]}</b> : null}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </>
+                )}
+              </motion.div>
+            )}
             {panel === 'join' && info && (
               <motion.div className="panel" initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 12 }}>
                 <p className="panel__label">Students join with</p>
@@ -355,7 +437,12 @@ export default function Teacher() {
                   {room.roster
                     .filter((r) => r.online)
                     .map((r) => (
-                      <li key={r.uid}>{r.name}</li>
+                      <li key={r.uid}>
+                        <button className="roster__btn" onClick={() => chatWith(r.uid)} title={`Message ${r.name}`}>
+                          <span>{r.name}</span>
+                          <Icon.chat />
+                        </button>
+                      </li>
                     ))}
                 </ul>
               </motion.div>

@@ -14,6 +14,7 @@
     "typecheck": "tsc -p packages/protocol && tsc -p packages/board-engine && tsc -p apps/server && tsc -p apps/web",
     "loadtest": "tsx scripts/loadtest.ts",
     "test:restart": "tsx scripts/restart-test.ts",
+    "test:chat": "tsx scripts/chat-test.ts",
     "db:local": "node scripts/d1-local.mjs"
   },
   "devDependencies": {

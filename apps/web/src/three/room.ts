@@ -181,12 +181,43 @@ export function buildRoom(opts: { shadows: boolean }): Room {
     g.add(pl);
   }
 
-  /* ---------- back wall: a large landscape and bookshelves ---------- */
-  const back = framed(T.paintingLandscape(), 2.6, 1.7, '#2a2119', false);
-  back.position.set(0, 2.6, D - 0.03);
+  /* ---------- back wall: a night-sky painting, bookshelves, paintings above them ---------- */
+  const back = framed(T.paintingNight(), 1.5, 1.88, '#2a2119', false);
+  back.position.set(0, 2.3, D - 0.03);
   back.rotation.y = Math.PI;
   g.add(back);
   for (const x of [-4.6, 4.6]) g.add(bookshelf(x, D - 0.25));
+  const overShelf = framed(T.paintingPlanet(), 1.6, 1.14, '#b08d57', false);
+  overShelf.position.set(4.6, 3.35, D - 0.03);
+  overShelf.rotation.y = Math.PI;
+  g.add(overShelf);
+  const overShelf2 = framed(T.paintingAbstract(), 0.86, 1.09, '#b08d57', false);
+  overShelf2.position.set(-4.6, 3.32, D - 0.03);
+  overShelf2.rotation.y = Math.PI;
+  g.add(overShelf2);
+  // An inscription across the top of the back wall.
+  const words = new Mesh(
+    new PlaneGeometry(6.4, 0.69),
+    new MeshBasicMaterial({ map: T.inscription('The important thing is not to stop questioning.', 'Albert Einstein'), transparent: true }),
+  );
+  words.position.set(0, 3.85, D - 0.02);
+  words.rotation.y = Math.PI;
+  g.add(words);
+
+  /* ---------- quotations from scientists, between the windows and the paintings ---------- */
+  const quotes: [string, string, string, number, number][] = [
+    // [quote, author, note, wall x, z]
+    ['If I have seen further, it is by standing on the shoulders of giants.', 'Isaac Newton', 'Letter to Robert Hooke, 1675', -W / 2 + 0.03, 5.8],
+    ['Nothing in life is to be feared, it is only to be understood.', 'Marie Curie', 'Physicist and chemist, Nobel 1903 & 1911', -W / 2 + 0.03, 10.2],
+    ['Imagination is more important than knowledge.', 'Albert Einstein', 'Interview, 1929', W / 2 - 0.03, 6.95],
+    ['Measure what is measurable, and make measurable what is not so.', 'Galileo Galilei', 'Attributed', W / 2 - 0.03, 11.55],
+  ];
+  for (const [q, a, n, x, z] of quotes) {
+    const f = framed(T.quotePlate(q, a, n), 0.78, 1.01, '#2a2119', true);
+    f.position.set(x, 2.5, z);
+    f.rotation.y = x < 0 ? Math.PI / 2 : -Math.PI / 2;
+    g.add(f);
+  }
 
   /* ---------- clock on the right wall ---------- */
   const clock = new Group();

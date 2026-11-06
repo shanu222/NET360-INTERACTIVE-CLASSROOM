@@ -48,7 +48,7 @@ You don't need to create tables — the server creates them on first start from 
    R2_SECRET_ACCESS_KEY=
    SNAPSHOT_EVERY_SECONDS=3
    FIREBASE_PROJECT_ID=
-   TEACHER_EMAILS=
+   TEACHER_EMAILS=shahnawaz9974balouch@gmail.com
    ALLOWED_ORIGINS=
    ```
 

@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { CODE_ALPHABET } from '@net360/protocol';
@@ -19,6 +19,21 @@ export default function Home() {
   const [topic, setTopic] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
+  // Only the NET360 admin account can start and teach classes.
+  const [canTeach, setCanTeach] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (tab !== 'teach' || !user) return;
+    let off = false;
+    setCanTeach(null);
+    headers()
+      .then((h) => api.me(h))
+      .then((r) => !off && setCanTeach(r.canTeach))
+      .catch(() => !off && setCanTeach(true)); // the server still checks when the class starts
+    return () => {
+      off = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, user?.uid]);
 
   const join = (e: FormEvent) => {
     e.preventDefault();
@@ -88,7 +103,25 @@ export default function Home() {
         ) : !ready ? (
           <div className="card__loading" />
         ) : !user ? (
-          <SignIn />
+          <SignIn prompt="Teachers sign in with the NET360 admin Google account." />
+        ) : canTeach === null ? (
+          <div className="card__loading" />
+        ) : !canTeach ? (
+          <div className="stack">
+            <div className="notice">
+              <strong>This account can't start classes</strong>
+              <span>
+                You're signed in as {user.email ?? user.name}. Only the NET360 teacher account can teach. To join a lesson, switch to
+                “I'm a student” and enter your class code.
+              </span>
+            </div>
+            <button type="button" className="btn btn--primary btn--wide" onClick={() => setTab('join')}>
+              Join as a student
+            </button>
+            <button type="button" className="btn btn--ghost btn--wide" onClick={signOut}>
+              Use a different account
+            </button>
+          </div>
         ) : (
           <form className="stack" onSubmit={start}>
             <div className="who">
@@ -116,7 +149,7 @@ export default function Home() {
             <button className="btn btn--primary btn--wide" disabled={busy}>
               {busy ? 'Opening your classroom…' : 'Start class'}
             </button>
-            {err && <p className="form-error">{err}</p>}
+            {err && <p className="form-error">{/not set up as a teacher/i.test(err) ? "This account can't start classes." : err}</p>}
           </form>
         )}
       </motion.div>

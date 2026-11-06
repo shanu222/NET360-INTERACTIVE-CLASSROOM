@@ -25,6 +25,7 @@ export const api = {
     }),
   owner: (headers: Record<string, string>, id: string) =>
     call<{ session: SessionInfo; boardKey: string; padKey: string }>(`/api/sessions/${id}/owner`, { headers }),
+  me: (headers: Record<string, string>) => call<{ name: string; email: string | null; canTeach: boolean }>('/api/me', { headers }),
   lookup: (code: string) => call<{ session: SessionInfo; present: number }>(`/api/join/${encodeURIComponent(code)}`),
 };
 

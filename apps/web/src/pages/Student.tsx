@@ -15,6 +15,7 @@ import { Icon } from '../components/Icons.tsx';
 import type { ZoomCommand } from '../three/Classroom3D.tsx';
 import { codeFor } from '../lib/code.ts';
 import { Navigate } from 'react-router-dom';
+import { ChatThread, useUnread } from '../components/Chat.tsx';
 
 /**
  * The student's classroom: the 3D room with the live board, classmates at
@@ -34,6 +35,9 @@ export default function Student() {
   const [menu, setMenu] = useState(false);
   const [toast, setToast] = useState('');
   const [hideHint, setHideHint] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
+  const me = room.welcome?.me.uid;
+  const unread = useUnread(room.chats, me, () => 'teacher', chatOpen ? 'teacher' : null);
   const [in3d, setIn3d] = useState(prefers3d);
   // 0 = from my desk, 1 = the board fills the screen
   const [zoomCmd, setZoomCmd] = useState<ZoomCommand>({ t: 0, n: 0 });
@@ -149,6 +153,15 @@ export default function Student() {
             )}
           </AnimatePresence>
         </div>
+        <button
+          className={`fab fab--quiet fab--chat ${chatOpen ? 'is-on' : ''} ${idle && !menu && !chatOpen && !unread.total ? 'is-idle' : ''}`}
+          aria-label="Message your teacher"
+          title="Message your teacher"
+          onClick={() => setChatOpen((o) => !o)}
+        >
+          <Icon.chat />
+          {unread.total > 0 && <b className="fab__badge">{unread.total}</b>}
+        </button>
         <motion.button
           className={`fab fab--hand ${room.hand ? 'is-up' : ''}`}
           whileTap={{ scale: 0.92 }}
@@ -163,6 +176,30 @@ export default function Student() {
           <span>{room.hand ? 'Hand raised' : 'Raise hand'}</span>
         </motion.button>
       </div>
+
+      <AnimatePresence>
+        {chatOpen && (
+          <motion.div className="drawer" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 16 }}>
+            <div className="drawer__head">
+              <span>
+                <strong>{info?.teacherName ?? 'Your teacher'}</strong>
+                <small>Only your teacher sees these messages</small>
+              </span>
+              <button aria-label="Close" onClick={() => setChatOpen(false)}>
+                <Icon.close />
+              </button>
+            </div>
+            <ChatThread
+              messages={room.chats}
+              me={me}
+              placeholder="Write to your teacher…"
+              empty="Ask a question or say hello."
+              autoFocus
+              onSend={(text) => room.socket?.emit('chat', { text })}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {toast && (

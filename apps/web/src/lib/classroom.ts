@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { io, type ManagerOptions, type Socket, type SocketOptions } from 'socket.io-client';
 import msgpackParser from 'socket.io-msgpack-parser';
 import { BoardSession } from '@net360/board-engine';
-import type { ClassState, ClientToServer, PersonPublic, RosterEntry, ServerToClient, Welcome } from '@net360/protocol';
+import type { ChatMessage, ClassState, ClientToServer, PersonPublic, RosterEntry, ServerToClient, Welcome } from '@net360/protocol';
 import { useAuth } from './auth.tsx';
 import { API_URL } from './env.ts';
 
@@ -17,6 +17,8 @@ export interface Classroom {
   /** Everyone in the room (for the 3D classroom). */
   people: PersonPublic[];
   hand: boolean;
+  /** Private messages this screen may see. */
+  chats: ChatMessage[];
   board: BoardSession;
   socket: Socket<ServerToClient, ClientToServer> | null;
 }
@@ -43,6 +45,7 @@ export function useClassroom(
   const [roster, setRoster] = useState<RosterEntry[]>([]);
   const [people, setPeople] = useState<PersonPublic[]>([]);
   const [hand, setHand] = useState(false);
+  const [chats, setChats] = useState<ChatMessage[]>([]);
   const enabled = opts.enabled ?? true;
 
   useEffect(() => {
@@ -98,6 +101,8 @@ export function useClassroom(
     s.on('roster', setRoster);
     s.on('people', setPeople);
     s.on('hand', setHand);
+    s.on('chatHistory', setChats);
+    s.on('chat', (m) => setChats((c) => (c.some((x) => x.id === m.id) ? c : [...c, m])));
     s.on('ended', () => setStatus('ended'));
     s.on('fail', (m) => {
       setError(m);
@@ -111,5 +116,5 @@ export function useClassroom(
     };
   }, [sessionId, enabled, opts.boardKey, opts.padKey, opts.code, board, clientId]);
 
-  return { status, error, welcome, cls, roster, people, hand, board, socket };
+  return { status, error, welcome, cls, roster, people, hand, chats, board, socket };
 }

@@ -1,5 +1,7 @@
 import {
   ACESFilmicToneMapping,
+  Mesh,
+  PlaneGeometry,
   Plane,
   Raycaster,
   Vector2,
@@ -55,11 +57,10 @@ export class ClassroomScene {
   private camera = new PerspectiveCamera(38, 1, 0.1, 60);
   private room: Room;
   private people: PeopleLayer;
-  private boardCanvas: HTMLCanvasElement;
-  private boardCtx: CanvasRenderingContext2D;
-  private boardTex: CanvasTexture;
-  private slate: HTMLCanvasElement;
-  private source: { committed: HTMLCanvasElement; live: HTMLCanvasElement } | null = null;
+  /** Ink sits on two transparent layers over the slate: finished strokes and strokes in progress. */
+  private inkCommitted: Mesh;
+  private inkLive: Mesh;
+  private slateTex: CanvasTexture;
   private ro: ResizeObserver;
   private dirty = true;
   private width = 1;
@@ -106,36 +107,43 @@ export class ClassroomScene {
     private view: View,
   ) {
     const small = isSmallDevice();
-    this.renderer = new WebGLRenderer({ antialias: true, powerPreference: 'high-performance', alpha: false });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, small ? 1.5 : 2));
+    // Background-only views (sign-in, the teacher's small class view) render lighter.
+    const light = view === 'lobby' || view === 'classview';
+    this.renderer = new WebGLRenderer({ antialias: !light || !small, powerPreference: 'high-performance', alpha: false });
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, light ? 1.25 : small ? 1.5 : 1.75));
     this.renderer.outputColorSpace = SRGBColorSpace;
     this.renderer.toneMapping = ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.18;
-    this.renderer.shadowMap.enabled = !small;
+    this.renderer.shadowMap.enabled = !small && !light;
     this.renderer.shadowMap.type = PCFSoftShadowMap;
     Object.assign(this.renderer.domElement.style, { position: 'absolute', inset: '0', width: '100%', height: '100%', display: 'block' });
     host.appendChild(this.renderer.domElement);
 
     this.scene.background = new Color('#2a2119');
-    this.room = buildRoom({ shadows: !small });
+    this.room = buildRoom({ shadows: !small && !light });
     this.scene.add(this.room.group);
     this.people = new PeopleLayer(this.room.seats, this.room.teacherSpot);
     this.scene.add(this.people.group);
 
-    // The board surface is a canvas we redraw whenever the ink changes.
-    this.boardCanvas = document.createElement('canvas');
-    this.boardCanvas.width = BOARD_TEX.w;
-    this.boardCanvas.height = BOARD_TEX.h;
-    this.boardCtx = this.boardCanvas.getContext('2d')!;
-    this.slate = slateBackground(BOARD_TEX.w, BOARD_TEX.h);
-    this.boardTex = new CanvasTexture(this.boardCanvas);
-    this.boardTex.colorSpace = SRGBColorSpace;
-    this.boardTex.anisotropy = this.renderer.capabilities.getMaxAnisotropy();
-    this.boardTex.minFilter = LinearFilter;
-    this.boardTex.generateMipmaps = false;
-    (this.room.board.material as MeshBasicMaterial).map = this.boardTex;
-    (this.room.board.material as MeshBasicMaterial).color.set('#ffffff');
-    this.composeBoard();
+    // The board: a static slate (or the welcome message) with two ink layers on top.
+    // Each layer uploads to the GPU only when it changes — finished strokes rarely,
+    // the stroke being written once per frame while the pen moves.
+    this.slateTex = this.canvasTexture(view === 'lobby' ? welcomeBoard(BOARD_TEX.w, BOARD_TEX.h) : slateBackground(BOARD_TEX.w, BOARD_TEX.h));
+    const boardMat = this.room.board.material as MeshBasicMaterial;
+    boardMat.map = this.slateTex;
+    boardMat.color.set('#ffffff');
+    const layer = (dz: number) => {
+      const m = new Mesh(
+        new PlaneGeometry(BOARD.w, BOARD.h),
+        new MeshBasicMaterial({ transparent: true, toneMapped: false, depthWrite: false, visible: false }),
+      );
+      m.position.set(0, BOARD.y, BOARD.z + dz);
+      m.renderOrder = 2;
+      this.scene.add(m);
+      return m;
+    };
+    this.inkCommitted = layer(0.002);
+    this.inkLive = layer(0.004);
 
     this.ro = new ResizeObserver(() => this.resize());
     this.ro.observe(host);
@@ -160,38 +168,49 @@ export class ClassroomScene {
     }, 30_000);
     this.renderer.setAnimationLoop(() => this.frame());
 
-    // Repaint the art once the web fonts arrive (equations on the plates).
-    void fontsReady().then(() => {
-      this.composeBoard();
-      this.invalidate();
-    });
+    // Repaint the welcome board once the web fonts arrive.
+    if (view === 'lobby') {
+      void fontsReady().then(() => {
+        this.slateTex.image = welcomeBoard(BOARD_TEX.w, BOARD_TEX.h);
+        this.slateTex.needsUpdate = true;
+        this.invalidate();
+      });
+    }
   }
 
   /* ---------------- board ---------------- */
 
-  /** Use a live board (two canvases from a BoardRenderer). */
-  setBoardSource(src: { committed: HTMLCanvasElement; live: HTMLCanvasElement } | null) {
-    this.source = src;
-    this.boardChanged();
+  private canvasTexture(c: HTMLCanvasElement) {
+    const t = new CanvasTexture(c);
+    t.colorSpace = SRGBColorSpace;
+    t.anisotropy = this.renderer.capabilities.getMaxAnisotropy();
+    t.minFilter = LinearFilter;
+    t.generateMipmaps = false;
+    return t;
   }
 
-  /** The ink changed: recomposite the board texture. */
-  boardChanged() {
-    this.composeBoard();
+  /** Use a live board (two canvases from a BoardRenderer). */
+  setBoardSource(src: { committed: HTMLCanvasElement; live: HTMLCanvasElement } | null) {
+    for (const [mesh, canvas] of [
+      [this.inkCommitted, src?.committed],
+      [this.inkLive, src?.live],
+    ] as const) {
+      const mat = mesh.material as MeshBasicMaterial;
+      mat.map?.dispose();
+      mat.map = canvas ? this.canvasTexture(canvas) : null;
+      mat.visible = Boolean(canvas);
+      mat.needsUpdate = true;
+    }
     this.invalidate();
   }
 
-  private composeBoard() {
-    const ctx = this.boardCtx;
-    const { w, h } = BOARD_TEX;
-    if (!this.source) {
-      ctx.drawImage(this.view === 'lobby' ? welcomeBoard(w, h) : this.slate, 0, 0);
-    } else {
-      ctx.drawImage(this.slate, 0, 0);
-      ctx.drawImage(this.source.committed, 0, 0, w, h);
-      ctx.drawImage(this.source.live, 0, 0, w, h);
-    }
-    this.boardTex.needsUpdate = true;
+  /** The ink changed: upload only the layer(s) that were redrawn. */
+  boardChanged(committed = true, live = true) {
+    const c = (this.inkCommitted.material as MeshBasicMaterial).map;
+    const l = (this.inkLive.material as MeshBasicMaterial).map;
+    if (committed && c) c.needsUpdate = true;
+    if (live && l) l.needsUpdate = true;
+    this.invalidate();
   }
 
   /* ---------------- people ---------------- */

@@ -1,5 +1,5 @@
 import { gunzipSync, gzipSync } from 'node:zlib';
-import type { BoardState } from '@net360/protocol';
+import type { BoardState, ChatMessage } from '@net360/protocol';
 import { config, dbEnabled, r2Enabled } from './config.ts';
 import { query, write } from './db.ts';
 import { boardKey, getObject, putObject } from './storage.ts';
@@ -60,6 +60,12 @@ export const persist = {
       `UPDATE hand_raises SET lowered_at = ?, lowered_by = ? WHERE session_id = ? AND user_id = ? AND lowered_at IS NULL`,
       [Date.now(), by, s.info.id, uid],
     );
+  },
+
+  chat(s: Session, m: ChatMessage) {
+    write(`INSERT INTO chat_messages (id, session_id, from_uid, from_name, to_uid, text, at) VALUES (?, ?, ?, ?, ?, ?, ?)`, [
+      m.id, s.info.id, m.from, m.fromName, m.to, m.text, m.at,
+    ]);
   },
 
   /** The board changed; it will be snapshotted on the next tick. */

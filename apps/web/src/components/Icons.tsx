@@ -2,6 +2,9 @@
 const P = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.75, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
 
 export const Icon = {
+  chat: () => (<svg viewBox="0 0 24 24" {...P}><path d="M20 12a7.5 7.5 0 01-11 6.6L4 20l1.4-4.4A7.5 7.5 0 1120 12z" /></svg>),
+  send: () => (<svg viewBox="0 0 24 24" {...P}><path d="M4 12l16-8-6 16-2.5-6.5L4 12z" /></svg>),
+  close: () => (<svg viewBox="0 0 24 24" {...P}><path d="M6 6l12 12M18 6L6 18" /></svg>),
   pen: () => (<svg viewBox="0 0 24 24" {...P}><path d="M4 20l1-4L16.5 4.5a2.1 2.1 0 013 3L8 19l-4 1z" /><path d="M14.5 6.5l3 3" /></svg>),
   highlighter: () => (<svg viewBox="0 0 24 24" {...P}><path d="M9 15l-3 3h5l1.5-1.5" /><path d="M9 15l7.5-10.5 3 3L9 15z" /><path d="M4 21h16" opacity=".5" /></svg>),
   eraser: () => (<svg viewBox="0 0 24 24" {...P}><path d="M8 20h12" /><path d="M5.5 16.5l9-9a2 2 0 012.8 0l1.2 1.2a2 2 0 010 2.8L11 19H8.5z" /><path d="M10 12l4.5 4.5" /></svg>),
@@ -31,5 +34,4 @@ export const Icon = {
   zoom: () => (<svg viewBox="0 0 24 24" {...P}><circle cx="11" cy="11" r="6.5" /><path d="M16 16l4.5 4.5M11 8.5v5M8.5 11h5" /></svg>),
   walk: () => (<svg viewBox="0 0 24 24" {...P}><circle cx="13" cy="4.5" r="1.8" /><path d="M10 21l2.5-6.5L15 17v4M9 11.5l2-3.5 3.5 1.5 2 3M12.5 14.5L11 9" /></svg>),
   check: () => (<svg viewBox="0 0 24 24" {...P}><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>),
-  close: () => (<svg viewBox="0 0 24 24" {...P}><path d="M6 6l12 12M18 6L6 18" /></svg>),
 };

@@ -54,3 +54,15 @@ CREATE TABLE IF NOT EXISTS hand_raises (
   lowered_by    TEXT                            -- student | teacher
 );
 CREATE INDEX IF NOT EXISTS idx_hands_session ON hand_raises (session_id, user_id);
+
+-- Private messages between the teacher and individual students.
+CREATE TABLE IF NOT EXISTS chat_messages (
+  id            TEXT PRIMARY KEY,
+  session_id    TEXT NOT NULL REFERENCES class_sessions (id),
+  from_uid      TEXT NOT NULL,
+  from_name     TEXT NOT NULL,
+  to_uid        TEXT NOT NULL,
+  text          TEXT NOT NULL,
+  at            INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_chat_session ON chat_messages (session_id, at);

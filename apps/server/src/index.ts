@@ -8,6 +8,7 @@ import msgpackParser from 'socket.io-msgpack-parser';
 import type {
   BoardEvent,
   BoardEventBody,
+  ChatMessage,
   ClientToServer,
   PersonPublic,
   RosterEntry,
@@ -24,6 +25,7 @@ import { mediaToken } from './media.ts';
 import { migrate } from './db.ts';
 import { flushAll, persist, restoreLiveSessions, startSnapshots } from './persist.ts';
 import { padKeyFor } from './passes.ts';
+import { nanoid } from 'nanoid';
 
 const app = express();
 app.set('trust proxy', true); // behind Railway's proxy
@@ -54,6 +56,13 @@ app.get('/api/config', (_req, res) => {
 
 app.get('/api/health', (_req, res) => res.json({ ok: true, epoch, db: dbEnabled, r2: r2Enabled, auth: authMode }));
 
+/** Who is signed in, and whether they may start classes. */
+app.get('/api/me', async (req, res) => {
+  const user = await userFromRequest(req);
+  if (!user) return res.status(401).json({ error: 'Sign in first.' });
+  res.json({ name: user.name, email: user.email ?? null, canTeach: mayTeach(user) });
+});
+
 /** Start a class. */
 app.post('/api/sessions', async (req, res) => {
   const user = await userFromRequest(req);
@@ -71,7 +80,7 @@ app.get('/api/sessions/:id/owner', async (req, res) => {
   const user = await userFromRequest(req);
   const s = store.get(req.params.id);
   if (!s) return res.status(404).json({ error: 'Class not found.' });
-  if (!user || user.uid !== s.teacherUid) return res.status(403).json({ error: 'Only the teacher can open this.' });
+  if (!user || user.uid !== s.teacherUid || !mayTeach(user)) return res.status(403).json({ error: 'Only the teacher can open this.' });
   res.json({ session: s.info, boardKey: s.boardKey, padKey: padKeyFor(s.boardKey) });
 });
 
@@ -292,6 +301,34 @@ io.on('connection', (socket: Socket<ClientToServer, ServerToClient>) => {
     if (role !== 'teacher') return;
     if (typeof patch?.showJoin === 'boolean') s.cls.showJoin = patch.showJoin;
     io.to(room(s)).emit('cls', s.cls);
+  });
+
+  // Private chat: students ↔ teacher only. Each student sees only their own thread.
+  socket.emit(
+    'chatHistory',
+    role === 'teacher' ? s.chats : role === 'student' ? s.chats.filter((m) => m.from === uid || m.to === uid) : [],
+  );
+  let lastChat = 0;
+  socket.on('chat', (msg) => {
+    if (role === 'board' || s.ended) return;
+    const text = String(msg?.text ?? '').trim().slice(0, 1000);
+    if (!text) return;
+    const now = Date.now();
+    if (now - lastChat < 300) return; // flood guard
+    lastChat = now;
+    let to: string;
+    if (role === 'teacher') {
+      to = String(msg?.to ?? '');
+      if (!s.roster.has(to)) return;
+    } else {
+      to = s.teacherUid;
+    }
+    const m: ChatMessage = { id: nanoid(10), from: uid, fromName: name, to, text, at: now };
+    s.chats.push(m);
+    if (s.chats.length > 3000) s.chats.splice(0, s.chats.length - 2500);
+    const studentUid = role === 'teacher' ? to : uid;
+    io.to(teacherRoom(s)).to(userRoom(s, studentUid)).emit('chat', m);
+    persist.chat(s, m);
   });
 
   socket.on('end', () => {

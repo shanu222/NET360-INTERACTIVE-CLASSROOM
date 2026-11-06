@@ -5,6 +5,7 @@ import {
   applyEvent,
   emptyBoard,
   type BoardEvent,
+  type ChatMessage,
   type BoardState,
   type ClassState,
   type RosterEntry,
@@ -25,6 +26,8 @@ export interface Session {
   cls: ClassState;
   ended: boolean;
   lastActive: number;
+  /** Private teacher–student messages (most recent kept in memory). */
+  chats: ChatMessage[];
 }
 
 /**
@@ -50,6 +53,7 @@ class Store {
       cls: { showJoin: true, present: 0, live: true },
       ended: false,
       lastActive: Date.now(),
+      chats: [],
     };
     this.byId.set(id, s);
     this.byCode.set(code, id);
@@ -67,6 +71,7 @@ class Store {
       cls: { showJoin: !board || board.order.length === 0, present: 0, live: true },
       ended: false,
       lastActive: Date.now(),
+      chats: [],
     };
     this.byId.set(s.info.id, s);
     this.byCode.set(s.info.code, s.info.id);

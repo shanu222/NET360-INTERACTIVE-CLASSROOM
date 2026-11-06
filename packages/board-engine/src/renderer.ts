@@ -26,8 +26,8 @@ export class BoardRenderer {
   private viewPage: number | null = null;
   overlay: OverlayFn | null = null;
   onPageView?: (page: number, following: boolean) => void;
-  /** Called after every redraw (the 3D classroom copies the canvases then). */
-  onFrame?: () => void;
+  /** Called after every redraw, saying which layer changed (the 3D classroom uploads only that). */
+  onFrame?: (committed: boolean, live: boolean) => void;
 
   constructor(
     private host: HTMLElement,
@@ -118,6 +118,8 @@ export class BoardRenderer {
   private frame() {
     this.raf = 0;
     const strokes = pageStrokes(this.session.state, this.page);
+    const didCommitted = this.dirtyCommitted;
+    const didLive = this.dirtyLive;
     if (this.dirtyCommitted) {
       this.dirtyCommitted = false;
       this.prep(this.cctx);
@@ -130,7 +132,7 @@ export class BoardRenderer {
       for (const s of live) drawStroke(this.lctx, s);
       this.overlay?.(this.lctx);
     }
-    this.onFrame?.();
+    this.onFrame?.(didCommitted, didLive);
   }
 
   destroy() {

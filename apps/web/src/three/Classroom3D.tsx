@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { BoardRenderer, PenInput, type BoardSession, type PenSettings } from '@net360/board-engine';
 import { BOARD_TEX, ClassroomScene, type Rect, type View } from './scene.ts';
 import type { PersonInRoom } from './people.ts';
+import { fontsReady } from './textures.ts';
 
 export interface ZoomCommand {
   /** 0 = from the desk, 1 = the board fills the screen. */
@@ -62,12 +63,19 @@ export default function Classroom3D({
 
   // The scene itself.
   useEffect(() => {
-    const sc = new ClassroomScene(hostRef.current!, view);
-    sc.onBoardRect = setRect;
-    sc.onZoom = (t) => cbs.current.onZoom?.(t);
-    setScene(sc);
+    // Let the classroom's fonts arrive first, so the quotes and prints are set in them.
+    let sc: ClassroomScene | null = null;
+    let cancelled = false;
+    void fontsReady().then(() => {
+      if (cancelled || !hostRef.current) return;
+      sc = new ClassroomScene(hostRef.current, view);
+      sc.onBoardRect = setRect;
+      sc.onZoom = (t) => cbs.current.onZoom?.(t);
+      setScene(sc);
+    });
     return () => {
-      sc.dispose();
+      cancelled = true;
+      sc?.dispose();
       setScene(null);
     };
   }, [view]);
@@ -87,7 +95,7 @@ export default function Classroom3D({
     });
     document.body.appendChild(host);
     const r = new BoardRenderer(host, board, { dpr: 1 });
-    r.onFrame = () => scene.boardChanged();
+    r.onFrame = (committed, live) => scene.boardChanged(committed, live);
     scene.setBoardSource({ committed: r.committed, live: r.live });
     setRenderer(r);
     cbs.current.onRenderer?.(r);

@@ -11,7 +11,8 @@ import {
   SRGBColorSpace,
   type Vector3,
 } from 'three';
-import { nameTag } from './textures.ts';
+import { deskCard, nameTag } from './textures.ts';
+import { MeshBasicMaterial, PlaneGeometry } from 'three';
 
 export interface PersonInRoom {
   uid: string;
@@ -94,6 +95,36 @@ function eyes(headY: number, dir: 1 | -1, scale = 1) {
     e.position.set(x * scale, headY + 0.012 * scale, dir * 0.1 * scale);
     g.add(e);
   }
+  return g;
+}
+
+const CARD = new PlaneGeometry(0.34, 0.106);
+
+/** "Ali Raza" → "Ali R." — short enough for a desk card. */
+function cardName(full: string) {
+  const parts = full.trim().split(/\s+/);
+  return parts.length > 1 ? `${parts[0]} ${parts[parts.length - 1][0]}.` : parts[0];
+}
+
+/**
+ * A folded name card on the front of the desk: one face toward the board
+ * (the teacher reads it), one toward the student behind.
+ */
+const cardMats = new Map<string, MeshBasicMaterial>();
+function nameCard(name: string): Group {
+  const label = cardName(name);
+  let mat = cardMats.get(label);
+  if (!mat) cardMats.set(label, (mat = new MeshBasicMaterial({ map: deskCard(label) })));
+  const g = new Group();
+  const front = new Mesh(CARD, mat);
+  front.rotation.set(-0.32, Math.PI, 0); // faces the board, leaning back
+  front.position.set(0, 0, -0.016);
+  const back = new Mesh(CARD, mat);
+  back.rotation.set(-0.32, 0, 0);
+  back.position.set(0, 0, 0.016);
+  g.add(front, back);
+  // On the desk top (desk at seat.z − 0.62, top at 0.76 m), near its front edge.
+  g.position.set(0.28, 0.76 + 0.05 - 0.47, -0.62 - 0.17);
   return g;
 }
 
@@ -234,6 +265,7 @@ export class PeopleLayer {
       if (cur && cur.hand === p.hand && cur.name === p.name) continue;
       if (cur) this.group.remove(cur.g);
       const g = seated(p.uid, p.hand);
+      g.add(nameCard(p.name));
       g.position.copy(seat);
       const tag = label(p.name.split(' ')[0], p.hand);
       tag.position.set(0, p.hand ? 1.32 : 1.08, 0);
