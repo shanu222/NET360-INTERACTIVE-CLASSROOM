@@ -18,16 +18,17 @@ async function call<T>(path: string, init: RequestInit & { headers?: Record<stri
 
 export const api = {
   startClass: (headers: Record<string, string>, subject: string, topic: string) =>
-    call<{ session: SessionInfo; boardKey: string }>('/api/sessions', {
+    call<{ session: SessionInfo; boardKey: string; padKey: string }>('/api/sessions', {
       method: 'POST',
       headers,
       body: JSON.stringify({ subject, topic }),
     }),
   owner: (headers: Record<string, string>, id: string) =>
-    call<{ session: SessionInfo; boardKey: string }>(`/api/sessions/${id}/owner`, { headers }),
+    call<{ session: SessionInfo; boardKey: string; padKey: string }>(`/api/sessions/${id}/owner`, { headers }),
   lookup: (code: string) => call<{ session: SessionInfo; present: number }>(`/api/join/${encodeURIComponent(code)}`),
 };
 
 /** Join and board links always point at the web app (this origin), not the API server. */
 export const joinUrl = (code: string) => `${location.origin}/join?code=${code}`;
 export const boardUrl = (sessionId: string, key: string) => `${location.origin}/board/${sessionId}?k=${key}`;
+export const padUrl = (sessionId: string, key: string) => `${location.origin}/pad/${sessionId}?k=${key}`;

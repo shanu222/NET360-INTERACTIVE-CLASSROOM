@@ -1097,3 +1097,59 @@ svg { display: block; }
 .console--3d .pagebar { pointer-events: auto; }
 .stage3d--teacher .console-bar { background: linear-gradient(180deg, rgba(20, 16, 12, 0.78), rgba(20, 16, 12, 0)); }
 .stage3d--teacher.tool-eraser .room3d__board--write { cursor: none; }
+
+/* Writing pad (teacher's phone or iPad) */
+.pad { position: fixed; inset: 0; display: flex; flex-direction: column; background: #17120e; color: var(--ivory); overscroll-behavior: none; }
+.pad__bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; height: 48px; padding: 0 max(14px, env(safe-area-inset-left)); }
+.pad__title { display: flex; align-items: center; gap: 10px; font-size: 14.5px; }
+.pad__title .muted { color: rgba(245, 239, 228, 0.6); }
+.pad__body { flex: 1; min-height: 0; display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 10px; align-items: center; padding: 0 max(12px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left)); }
+.pad .dock { padding: 6px; }
+.pad .dock__btn { width: 38px; height: 38px; }
+.pad__board { display: flex; flex-direction: column; align-items: center; gap: 10px; min-width: 0; --bw: 100%; --bh: calc(100dvh - 48px - 70px); }
+.pad__board .slate { width: min(100%, calc(var(--bh) * 16 / 9)); box-shadow: 0 0 0 6px var(--oak-dark); }
+.pad__portrait { display: none; }
+@media (orientation: portrait) {
+  .pad__body { display: none; }
+  .pad__portrait { display: grid; place-items: center; flex: 1; margin: 0; font-size: 17px; color: rgba(245, 239, 228, 0.75); }
+}
+
+/* Teacher: writing tablet panel */
+.panel--pen { width: min(330px, calc(100vw - 200px)); justify-items: stretch; text-align: left; }
+.penstatus { display: flex; gap: 12px; align-items: flex-start; padding: 12px; border-radius: 12px; background: var(--ivory-2); }
+.penstatus span:last-child { display: grid; gap: 2px; }
+.penstatus strong { font-size: 14px; }
+.penstatus small { font-size: 12.5px; color: var(--ink-soft); line-height: 1.4; }
+.penstatus__dot { flex: none; width: 10px; height: 10px; margin-top: 5px; border-radius: 50%; background: #c9a24a; box-shadow: 0 0 0 4px rgba(201, 162, 74, 0.2); }
+.penstatus.is-ok .penstatus__dot { background: #3f9d6a; box-shadow: 0 0 0 4px rgba(63, 157, 106, 0.2); }
+.steps { margin: 0; padding-left: 18px; display: grid; gap: 6px; font-size: 13px; line-height: 1.45; color: var(--ink-2); }
+.padqr { display: flex; gap: 12px; align-items: center; }
+.padqr .qr { flex: none; }
+.padqr p { margin: 0; line-height: 1.45; color: var(--ink-2); }
+.panel--pen .small { margin: 0; line-height: 1.45; }
+.rail__hand.is-ok { color: #7ee0b5; }
+.pill--ok { background: rgba(63, 157, 106, 0.18); color: #9be3bd; }
+
+/* Teacher walking around the class */
+.walkhint {
+  position: fixed;
+  left: 50%;
+  bottom: 18px;
+  translate: -50% 0;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 8px 8px 18px;
+  border-radius: 99px;
+  background: var(--glass);
+  backdrop-filter: blur(14px);
+  color: var(--ivory);
+  font-size: 13px;
+  white-space: nowrap;
+  box-shadow: 0 12px 30px -10px rgba(0, 0, 0, 0.55);
+}
+.btn--light { background: var(--ivory); color: var(--ink); }
+.stage3d--teacher:has(.walkhint) .pagebar, .stage3d--teacher:has(.walkhint) .dock { opacity: 0.25; pointer-events: none; }
+/* Student look-around hint */
+.zoombar__hint { white-space: nowrap; }

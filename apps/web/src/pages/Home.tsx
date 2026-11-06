@@ -31,7 +31,7 @@ export default function Home() {
     setErr('');
     try {
       const r = await api.startClass(await headers(), subject, topic.trim());
-      nav(`/teach/${r.session.id}`, { state: { boardKey: r.boardKey } });
+      nav(`/teach/${r.session.id}`, { state: { boardKey: r.boardKey, padKey: r.padKey } });
     } catch (ex) {
       setErr((ex as Error).message);
       setBusy(false);

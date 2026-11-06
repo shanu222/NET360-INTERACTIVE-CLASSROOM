@@ -20,6 +20,8 @@ export function SignIn({ prompt }: { prompt?: string }) {
             // Called synchronously from the click so the Google window isn't blocked.
             setErr('');
             setBusy(true);
+            // Remember that sign-in started here, so the join card can continue after a redirect.
+            sessionStorage.setItem('n360.signingIn', '1');
             signInWithGoogle()
               .catch((e) => setErr((e as Error).message))
               .finally(() => setBusy(false));

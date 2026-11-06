@@ -13,6 +13,8 @@ import { SignIn } from '../components/SignIn.tsx';
 import { Lobby } from '../components/Lobby.tsx';
 import { Icon } from '../components/Icons.tsx';
 import type { ZoomCommand } from '../three/Classroom3D.tsx';
+import { codeFor } from '../lib/code.ts';
+import { Navigate } from 'react-router-dom';
 
 /**
  * The student's classroom: the 3D room with the live board, classmates at
@@ -23,7 +25,9 @@ export default function Student() {
   const loc = useLocation();
   const nav = useNavigate();
   const { ready, user } = useAuth();
-  const room = useClassroom(sessionId, { enabled: Boolean(user), as: 'student' });
+  // Students get in with the class code they entered on the join card.
+  const code = codeFor(sessionId);
+  const room = useClassroom(sessionId, { enabled: Boolean(user && code), as: 'student', code: code ?? undefined });
   const [renderer, setRenderer] = useState<BoardRenderer | null>(null);
   const pg = usePageInfo(room.board, renderer);
   const idle = useIdle(3200);
@@ -36,6 +40,8 @@ export default function Student() {
   const [atBoard, setAtBoard] = useState(false);
   const zoomTo = (t: number) => setZoomCmd((z) => ({ t, n: z.n + 1 }));
   const entering = Boolean((loc.state as { entering?: boolean } | null)?.entering);
+
+  if (!code) return <Navigate to="/join" replace />;
 
   if (ready && !user) {
     return (
@@ -176,8 +182,8 @@ export default function Student() {
                 Save notes as PDF
               </button>
             )}
-            <button className="btn btn--ghost btn--wide" onClick={() => nav('/')}>
-              Leave
+            <button className="btn btn--ghost btn--wide" onClick={() => nav(room.status === 'error' ? '/join' : '/')}>
+              {room.status === 'error' ? 'Join again' : 'Leave'}
             </button>
           </div>
         </div>
@@ -218,7 +224,7 @@ export default function Student() {
           <button className={atBoard ? 'is-on' : ''} onClick={() => zoomTo(1)}>
             <Icon.zoom /> Board
           </button>
-          <span className="zoombar__hint">Scroll or pinch to zoom</span>
+          <span className="zoombar__hint">Drag to look around · scroll or pinch to zoom</span>
         </div>
       </div>
     );

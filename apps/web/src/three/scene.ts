@@ -83,6 +83,20 @@ export class ClassroomScene {
   private pinchDist = 0;
   private ray = new Raycaster();
   private boardPlane = new Plane(new Vector3(0, 0, 1), -BOARD.z);
+  /** Student "walk" mode: free movement around the room. */
+  private walk = {
+    on: false,
+    pos: new Vector3(0, 1.62, 9),
+    yaw: Math.PI, // facing the board (−z)
+    pitch: 0,
+    goal: null as Vector3 | null,
+    keys: new Set<string>(),
+    drag: null as { id: number; x: number; y: number; moved: number } | null,
+    last: 0,
+  };
+  private floorPlane = new Plane(new Vector3(0, 1, 0), 0);
+  /** Student: turning the head from the desk (no moving). */
+  private look = { yaw: 0, pitch: 0, tYaw: 0, tPitch: 0 };
   onBoardRect?: (r: Rect | null) => void;
   /** Student view: the zoom level changed (for the Desk / Board switch). */
   onZoom?: (t: number) => void;
@@ -127,13 +141,18 @@ export class ClassroomScene {
     this.ro.observe(host);
     this.resize();
     window.addEventListener('pointermove', this.onPointer, { passive: true });
-    if (view === 'student') {
+    if (view === 'student' || view === 'teacher') {
       const el = this.renderer.domElement;
       el.addEventListener('wheel', this.onWheel, { passive: false });
       el.addEventListener('pointerdown', this.onPinchDown);
       el.addEventListener('pointermove', this.onPinchMove);
       el.addEventListener('pointerup', this.onPinchUp);
       el.addEventListener('pointercancel', this.onPinchUp);
+      el.addEventListener('pointerdown', this.onWalkDown);
+      el.addEventListener('pointermove', this.onWalkMove);
+      el.addEventListener('pointerup', this.onWalkUp);
+      window.addEventListener('keydown', this.onKey);
+      window.addEventListener('keyup', this.onKey);
     }
     this.clockTimer = window.setInterval(() => {
       this.room.tickClock();
@@ -273,7 +292,11 @@ export class ClassroomScene {
 
   /** 0 = from the desk, 1 = the board fills the screen. */
   setZoom(t: number) {
+    if (this.walk.on) this.leaveWalk();
     this.zoomTarget = Math.max(0, Math.min(1, t));
+    // Choosing Desk or Board turns the head back to the front.
+    this.look.tYaw = 0;
+    this.look.tPitch = 0;
     this.invalidate();
   }
 
@@ -282,8 +305,13 @@ export class ClassroomScene {
   }
 
   private onWheel = (e: WheelEvent) => {
-    e.preventDefault();
-    this.setZoom(this.zoomTarget - e.deltaY * (e.ctrlKey ? 0.01 : 0.0016));
+    if (this.walk.on) {
+      e.preventDefault();
+      this.step(-e.deltaY * 0.004);
+    } else if (this.view === 'student') {
+      e.preventDefault();
+      this.setZoom(this.zoomTarget - e.deltaY * (e.ctrlKey ? 0.01 : 0.0016));
+    }
   };
 
   private onPinchDown = (e: PointerEvent) => {
@@ -297,7 +325,10 @@ export class ClassroomScene {
     this.pinch.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (this.pinch.size === 2) {
       const d = this.pinchSpan();
-      if (this.pinchDist) this.setZoom(this.zoomTarget + (d - this.pinchDist) / 320);
+      if (this.pinchDist) {
+        if (this.walk.on) this.step((d - this.pinchDist) / 90);
+        else if (this.view === 'student') this.setZoom(this.zoomTarget + (d - this.pinchDist) / 320);
+      }
       this.pinchDist = d;
     }
   };
@@ -310,6 +341,144 @@ export class ClassroomScene {
   private pinchSpan() {
     const [a, b] = [...this.pinch.values()];
     return Math.hypot(a.x - b.x, a.y - b.y);
+  }
+
+  /* ---------------- student: walk around the room ---------------- */
+
+  /** Start walking from wherever the camera is now. */
+  setWalk(on: boolean) {
+    if (on === this.walk.on) return;
+    if (!on) {
+      this.leaveWalk();
+      return;
+    }
+    const dir = new Vector3();
+    this.camera.getWorldDirection(dir);
+    this.walk.pos.copy(this.camera.position).setY(1.62);
+    this.clampWalk(this.walk.pos);
+    this.walk.yaw = Math.atan2(dir.x, dir.z);
+    this.walk.pitch = Math.asin(Math.max(-1, Math.min(1, dir.y)));
+    this.walk.goal = null;
+    this.walk.on = true;
+    this.walk.last = performance.now();
+    this.camera.fov = 62;
+    this.camera.updateProjectionMatrix();
+    this.invalidate();
+  }
+
+  get walking() {
+    return this.walk.on;
+  }
+
+  private leaveWalk() {
+    this.walk.on = false;
+    this.walk.keys.clear();
+    this.walk.goal = null;
+    this.frameView(); // back to this view's own camera (teacher: the whole class)
+    this.invalidate();
+  }
+
+  private clampWalk(v: Vector3) {
+    v.x = Math.max(-6.3, Math.min(6.3, v.x));
+    v.z = Math.max(1.0, Math.min(15.3, v.z));
+    return v;
+  }
+
+  /** Move along the view direction (positive = forward). */
+  private step(m: number) {
+    const w = this.walk;
+    w.goal = null;
+    w.pos.x += Math.sin(w.yaw) * m;
+    w.pos.z += Math.cos(w.yaw) * m;
+    this.clampWalk(w.pos);
+    this.invalidate();
+  }
+
+  private onWalkDown = (e: PointerEvent) => {
+    const looking = this.view === 'student' && !this.walk.on;
+    if ((!this.walk.on && !looking) || this.pinch.size > 1 || (e.pointerType === 'mouse' && e.button !== 0)) return;
+    this.walk.drag = { id: e.pointerId, x: e.clientX, y: e.clientY, moved: 0 };
+    (e.target as Element).setPointerCapture?.(e.pointerId);
+  };
+
+  private onWalkMove = (e: PointerEvent) => {
+    const d = this.walk.drag;
+    if (!d || d.id !== e.pointerId || this.pinch.size > 1) return;
+    const dx = e.clientX - d.x;
+    const dy = e.clientY - d.y;
+    d.moved += Math.abs(dx) + Math.abs(dy);
+    d.x = e.clientX;
+    d.y = e.clientY;
+    if (!this.walk.on) {
+      // Student turning their head from the desk: most of the way round, but seated.
+      this.look.tYaw = Math.max(-2.7, Math.min(2.7, this.look.tYaw + dx * 0.005));
+      this.look.tPitch = Math.max(-0.55, Math.min(0.5, this.look.tPitch - dy * 0.004));
+      this.invalidate();
+      return;
+    }
+    this.walk.yaw -= dx * 0.0045;
+    this.walk.pitch = Math.max(-0.9, Math.min(0.75, this.walk.pitch - dy * 0.0035));
+    this.invalidate();
+  };
+
+  private onWalkUp = (e: PointerEvent) => {
+    const d = this.walk.drag;
+    if (!d || d.id !== e.pointerId) return;
+    this.walk.drag = null;
+    if (!this.walk.on || d.moved > 8) return;
+    // A tap: walk to the spot on the floor.
+    const r = this.host.getBoundingClientRect();
+    const ndc = new Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+    this.ray.setFromCamera(ndc, this.camera);
+    const hit = new Vector3();
+    if (this.ray.ray.intersectPlane(this.floorPlane, hit)) {
+      this.walk.goal = this.clampWalk(new Vector3(hit.x, 1.62, hit.z));
+      this.invalidate();
+    }
+  };
+
+  private onKey = (e: KeyboardEvent) => {
+    if (!this.walk.on || (e.target as HTMLElement)?.closest?.('input, textarea')) return;
+    const k = e.key.toLowerCase();
+    if (!['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k)) return;
+    e.preventDefault();
+    if (e.type === 'keydown') this.walk.keys.add(k);
+    else this.walk.keys.delete(k);
+    this.walk.goal = null;
+    this.invalidate();
+  };
+
+  /** Advance walking; returns true while still moving. */
+  private updateWalk(): boolean {
+    const w = this.walk;
+    const now = performance.now();
+    const dt = Math.min(0.05, (now - w.last) / 1000);
+    w.last = now;
+    let moving = false;
+    const k = w.keys;
+    const fwd = (k.has('w') || k.has('arrowup') ? 1 : 0) - (k.has('s') || k.has('arrowdown') ? 1 : 0);
+    const turn = (k.has('a') || k.has('arrowleft') ? 1 : 0) - (k.has('d') || k.has('arrowright') ? 1 : 0);
+    if (fwd || turn) {
+      w.yaw += turn * 1.6 * dt;
+      w.pos.x += Math.sin(w.yaw) * fwd * 2.4 * dt;
+      w.pos.z += Math.cos(w.yaw) * fwd * 2.4 * dt;
+      this.clampWalk(w.pos);
+      moving = true;
+    } else if (w.goal) {
+      const to = w.goal.clone().sub(w.pos);
+      const dist = Math.hypot(to.x, to.z);
+      if (dist < 0.03) w.goal = null;
+      else {
+        const m = Math.min(dist, 2.6 * dt + dist * 0.04);
+        w.pos.x += (to.x / dist) * m;
+        w.pos.z += (to.z / dist) * m;
+        moving = true;
+      }
+    }
+    this.camera.position.copy(w.pos);
+    const look = new Vector3(Math.sin(w.yaw) * Math.cos(w.pitch), Math.sin(w.pitch), Math.cos(w.yaw) * Math.cos(w.pitch));
+    this.camera.lookAt(w.pos.clone().add(look));
+    return moving;
   }
 
   /* ---------------- teacher: writing on the 3D board ---------------- */
@@ -362,6 +531,18 @@ export class ClassroomScene {
     const moving = Math.abs(tx - this.offset.x) > 0.0005 || Math.abs(ty - this.offset.y) > 0.0005;
     this.offset.x += (tx - this.offset.x) * 0.08;
     this.offset.y += (ty - this.offset.y) * 0.08;
+    if (this.walk.on) {
+      const walking = this.walk.keys.size > 0 || this.walk.goal !== null;
+      if (!this.dirty && !walking) {
+        this.walk.last = performance.now();
+        return;
+      }
+      this.dirty = false;
+      this.updateWalk();
+      this.renderer.render(this.scene, this.camera);
+      this.reportBoardRect();
+      return;
+    }
     if (!this.dirty && !moving && !lobby && !zooming) return;
     this.dirty = false;
 
@@ -375,6 +556,19 @@ export class ClassroomScene {
       cam.position.z += Math.sin(t * 0.08) * 0.6;
     }
     cam.lookAt(this.base.target);
+    if (this.view === 'student') {
+      const L = this.look;
+      const settling = Math.abs(L.tYaw - L.yaw) > 0.0005 || Math.abs(L.tPitch - L.pitch) > 0.0005;
+      L.yaw += (L.tYaw - L.yaw) * 0.2;
+      L.pitch += (L.tPitch - L.pitch) * 0.2;
+      if (settling) this.dirty = true; // keep easing next frame
+      // Fade the head-turn out as the student zooms toward the board.
+      const k2 = 1 - this.zoomCur;
+      if (Math.abs(L.yaw) > 0.0005 || Math.abs(L.pitch) > 0.0005) {
+        cam.rotateOnWorldAxis(new Vector3(0, 1, 0), L.yaw * k2);
+        cam.rotateX(L.pitch * k2);
+      }
+    }
     this.renderer.render(this.scene, cam);
     this.reportBoardRect();
   }
@@ -393,6 +587,14 @@ export class ClassroomScene {
     const ys: number[] = [];
     for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
       const v = new Vector3((sx * BOARD.w) / 2, BOARD.y + (sy * BOARD.h) / 2, BOARD.z).project(this.camera);
+      if (v.z > 1 || v.z < -1) {
+        // Part of the board is behind the camera (looking away while walking).
+        if (this.lastRect !== 'none') {
+          this.lastRect = 'none';
+          this.onBoardRect(null);
+        }
+        return;
+      }
       xs.push(((v.x + 1) / 2) * this.width);
       ys.push(((1 - v.y) / 2) * this.height);
     }
@@ -413,6 +615,11 @@ export class ClassroomScene {
     el.removeEventListener('pointermove', this.onPinchMove);
     el.removeEventListener('pointerup', this.onPinchUp);
     el.removeEventListener('pointercancel', this.onPinchUp);
+    el.removeEventListener('pointerdown', this.onWalkDown);
+    el.removeEventListener('pointermove', this.onWalkMove);
+    el.removeEventListener('pointerup', this.onWalkUp);
+    window.removeEventListener('keydown', this.onKey);
+    window.removeEventListener('keyup', this.onKey);
     clearInterval(this.clockTimer);
     this.ro.disconnect();
     this.scene.traverse((o) => {

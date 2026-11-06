@@ -8,6 +8,7 @@ import Join from './pages/Join.tsx';
 import Student from './pages/Student.tsx';
 import Teacher from './pages/Teacher.tsx';
 import BoardDisplay from './pages/BoardDisplay.tsx';
+import Pad from './pages/Pad.tsx';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
@@ -19,6 +20,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
           <Route path="/class/:sessionId" element={<Student />} />
           <Route path="/teach/:sessionId" element={<Teacher />} />
           <Route path="/board/:sessionId" element={<BoardDisplay />} />
+          <Route path="/pad/:sessionId" element={<Pad />} />
           <Route path="*" element={<Home />} />
         </Routes>
       </BrowserRouter>

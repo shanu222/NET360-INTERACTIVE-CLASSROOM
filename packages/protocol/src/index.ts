@@ -280,6 +280,10 @@ export interface SocketAuth {
    * with the teacher's own account (so one person can try both sides).
    */
   as?: 'teacher' | 'student';
+  /** The class code the student entered (required for students). */
+  code?: string;
+  /** Writing-pad key (teacher's phone or iPad used as a pen surface). */
+  padKey?: string;
   clientId: string;
 }
 

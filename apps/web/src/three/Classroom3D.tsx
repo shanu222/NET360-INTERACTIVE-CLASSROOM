@@ -26,6 +26,7 @@ export default function Classroom3D({
   seat = null,
   zoom,
   onZoom,
+  walk = false,
   pen,
   onPen,
   onRenderer,
@@ -42,6 +43,8 @@ export default function Classroom3D({
   seat?: number | null;
   zoom?: ZoomCommand;
   onZoom?: (t: number) => void;
+  /** Teacher view: walk freely around the room (writing pauses while walking). */
+  walk?: boolean;
   /** Teacher view: current pen settings — enables writing on the 3D board. */
   pen?: () => PenSettings;
   onPen?: (p: PenInput | null) => void;
@@ -98,7 +101,7 @@ export default function Classroom3D({
   }, [scene, board]);
 
   // Teacher: the pen writes on the board in the room.
-  const penEnabled = Boolean(pen);
+  const penEnabled = Boolean(pen) && !walk;
   useEffect(() => {
     if (!penEnabled || !scene || !renderer || !overlay || !board) return;
     const pi = new PenInput(overlay, board, renderer, () => cbs.current.pen!(), { map: scene.boardPoint });
@@ -124,6 +127,10 @@ export default function Classroom3D({
   useEffect(() => {
     if (zoom) scene?.setZoom(zoom.t);
   }, [scene, zoom]);
+
+  useEffect(() => {
+    scene?.setWalk(walk);
+  }, [scene, walk]);
 
   return (
     <div className={`room3d ${className}`} ref={hostRef}>

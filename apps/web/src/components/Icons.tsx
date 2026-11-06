@@ -29,6 +29,7 @@ export const Icon = {
   board: () => (<svg viewBox="0 0 24 24" {...P}><rect x="3" y="4" width="18" height="12" rx="1.5" /><path d="M7 20l2-4M17 20l-2-4M7 9.5c1.5-2 3-2 4.5 0s3 2 4.5 0" /></svg>),
   desk: () => (<svg viewBox="0 0 24 24" {...P}><path d="M3 10h18M5 10v9M19 10v9M8 10V6h8v4" /></svg>),
   zoom: () => (<svg viewBox="0 0 24 24" {...P}><circle cx="11" cy="11" r="6.5" /><path d="M16 16l4.5 4.5M11 8.5v5M8.5 11h5" /></svg>),
+  walk: () => (<svg viewBox="0 0 24 24" {...P}><circle cx="13" cy="4.5" r="1.8" /><path d="M10 21l2.5-6.5L15 17v4M9 11.5l2-3.5 3.5 1.5 2 3M12.5 14.5L11 9" /></svg>),
   check: () => (<svg viewBox="0 0 24 24" {...P}><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>),
   close: () => (<svg viewBox="0 0 24 24" {...P}><path d="M6 6l12 12M18 6L6 18" /></svg>),
 };

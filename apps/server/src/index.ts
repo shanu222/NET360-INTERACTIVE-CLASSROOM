@@ -23,6 +23,7 @@ import { store, type Session } from './store.ts';
 import { mediaToken } from './media.ts';
 import { migrate } from './db.ts';
 import { flushAll, persist, restoreLiveSessions, startSnapshots } from './persist.ts';
+import { padKeyFor } from './passes.ts';
 
 const app = express();
 app.set('trust proxy', true); // behind Railway's proxy
@@ -62,7 +63,7 @@ app.post('/api/sessions', async (req, res) => {
   const topic = String(req.body?.topic ?? '').slice(0, 120);
   const s = store.create(user, subject, topic);
   persist.sessionCreated(s);
-  res.json({ session: s.info, boardKey: s.boardKey });
+  res.json({ session: s.info, boardKey: s.boardKey, padKey: padKeyFor(s.boardKey) });
 });
 
 /** Teacher re-opening their console: returns the board key again. */
@@ -71,7 +72,7 @@ app.get('/api/sessions/:id/owner', async (req, res) => {
   const s = store.get(req.params.id);
   if (!s) return res.status(404).json({ error: 'Class not found.' });
   if (!user || user.uid !== s.teacherUid) return res.status(403).json({ error: 'Only the teacher can open this.' });
-  res.json({ session: s.info, boardKey: s.boardKey });
+  res.json({ session: s.info, boardKey: s.boardKey, padKey: padKeyFor(s.boardKey) });
 });
 
 /** Look up a class by its join code (shown before the student enters). */
@@ -204,9 +205,19 @@ io.use(async (socket, next) => {
     Object.assign(data, { role: 'board', uid: `board:${s.info.id}`, name: 'Classroom board' });
     return next();
   }
+  // The teacher's writing pad (a phone or iPad opened from the console's QR code).
+  if (auth.padKey) {
+    if (auth.padKey !== padKeyFor(s.boardKey)) return next(new Error('This writing pad link is not valid for the class.'));
+    Object.assign(data, { role: 'teacher', uid: s.teacherUid, name: s.info.teacherName });
+    return next();
+  }
   const user = await verifyUser(auth.idToken, auth.dev);
   if (!user) return next(new Error('Please sign in to join the class.'));
   const isTeacher = user.uid === s.teacherUid && auth.as !== 'student';
+  // Students get in only with the code the teacher shared, even with a valid link.
+  if (!isTeacher && String(auth.code ?? '').toUpperCase() !== s.info.code) {
+    return next(new Error('Enter the class code to join.'));
+  }
   // The teacher's account opened from a student screen joins as a separate student.
   const uid = user.uid === s.teacherUid && !isTeacher ? `${user.uid}#student` : user.uid;
   Object.assign(data, { role: isTeacher ? 'teacher' : 'student', uid, name: user.name });

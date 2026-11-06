@@ -28,7 +28,7 @@ export interface Classroom {
  */
 export function useClassroom(
   sessionId: string | undefined,
-  opts: { boardKey?: string; enabled?: boolean; as?: 'teacher' | 'student' } = {},
+  opts: { boardKey?: string; padKey?: string; code?: string; enabled?: boolean; as?: 'teacher' | 'student' } = {},
 ): Classroom {
   const { socketAuth } = useAuth();
   const authRef = useRef(socketAuth);
@@ -56,8 +56,8 @@ export function useClassroom(
       auth: (cb) => {
         authRef
           .current()
-          .then((a) => cb({ sessionId, clientId, boardKey: opts.boardKey, as: opts.as, ...a }))
-          .catch(() => cb({ sessionId, clientId, boardKey: opts.boardKey, as: opts.as }));
+          .then((a) => cb({ sessionId, clientId, boardKey: opts.boardKey, padKey: opts.padKey, code: opts.code, as: opts.as, ...a }))
+          .catch(() => cb({ sessionId, clientId, boardKey: opts.boardKey, padKey: opts.padKey, code: opts.code, as: opts.as }));
       },
     };
     // Same origin in local dev; the Railway server's URL when split-hosted.
@@ -109,7 +109,7 @@ export function useClassroom(
       s.disconnect();
       setSocket(null);
     };
-  }, [sessionId, enabled, opts.boardKey, board, clientId]);
+  }, [sessionId, enabled, opts.boardKey, opts.padKey, opts.code, board, clientId]);
 
   return { status, error, welcome, cls, roster, people, hand, board, socket };
 }

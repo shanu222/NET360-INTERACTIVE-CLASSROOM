@@ -107,7 +107,7 @@ async function main() {
 
   const teacher = connect('teacher', { sessionId: session.id, dev: devT });
   const display = connect('board', { sessionId: session.id, boardKey });
-  const students = Array.from({ length: 10 }, (_, i) => connect(`s${i}`, { sessionId: session.id, dev: { uid: `rs${i}`, name: `Student ${i}` } }));
+  const students = Array.from({ length: 10 }, (_, i) => connect(`s${i}`, { sessionId: session.id, code: session.code, dev: { uid: `rs${i}`, name: `Student ${i}` } }));
   const everyone = [teacher, display, ...students];
   await sleep(1200);
 

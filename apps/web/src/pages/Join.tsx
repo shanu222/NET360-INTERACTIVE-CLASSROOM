@@ -8,6 +8,7 @@ import { useAuth } from '../lib/auth.tsx';
 import { SignIn } from '../components/SignIn.tsx';
 import { Icon } from '../components/Icons.tsx';
 import { Lobby } from '../components/Lobby.tsx';
+import { rememberCode } from '../lib/code.ts';
 
 /** Pull a class code from a scanned join URL or a typed code. */
 function codeFrom(text: string): string | null {
@@ -31,6 +32,7 @@ export default function Join() {
   const [err, setErr] = useState('');
   const [entering, setEntering] = useState(false);
   const video = useRef<HTMLVideoElement>(null);
+
 
   // Look the class up as soon as there is a full code.
   useEffect(() => {
@@ -73,8 +75,10 @@ export default function Join() {
   const signedOutHere = useRef(false);
   useEffect(() => {
     if (ready && !user) signedOutHere.current = true;
+    if (sessionStorage.getItem('n360.signingIn')) signedOutHere.current = true;
     if (user && found && signedOutHere.current && !entering) {
       signedOutHere.current = false;
+      sessionStorage.removeItem('n360.signingIn');
       enter();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -82,6 +86,7 @@ export default function Join() {
 
   const enter = () => {
     if (!found) return;
+    rememberCode(found.session.id, found.session.code);
     setEntering(true);
     setTimeout(() => nav(`/class/${found.session.id}`, { state: { entering: true } }), 520);
   };
@@ -142,7 +147,7 @@ export default function Join() {
                     <p className="signin__note">Joining as {user.name}</p>
                   </>
                 ) : (
-                  <SignIn prompt="Sign in to take your seat." />
+                  <SignIn prompt="Sign in with Google to take your seat." />
                 )}
                 <button className="link" onClick={() => setCode('')}>
                   Not this class?

@@ -71,7 +71,7 @@ async function main() {
   const teacher = connect('teacher', { sessionId: session.id, dev: devT });
   const display = connect('board', { sessionId: session.id, boardKey });
   const students = Array.from({ length: STUDENTS }, (_, i) =>
-    connect(`s${i}`, { sessionId: session.id, dev: { uid: `stu-${i}`, name: `Student ${i}` } }, true),
+    connect(`s${i}`, { sessionId: session.id, code: session.code, dev: { uid: `stu-${i}`, name: `Student ${i}` } }, true),
   );
   const t0 = performance.now();
   await Promise.all([teacher, display, ...students].map((c) => c.synced));
@@ -112,9 +112,15 @@ async function main() {
   }
   console.log(`Teacher wrote ${STROKES} strokes, ${pointsSent} points`);
 
+  // Without the class code a student is turned away, even with the class link.
+  const noCode = io(URL_, { parser: msgpackParser, transports: ['websocket'], auth: { sessionId: session.id, clientId: 'x', dev: { uid: 'nocode', name: 'No Code' } }, reconnection: false });
+  const refused = await new Promise<string>((r) => { noCode.on('connect_error', (e) => r(e.message)); noCode.on('connect', () => r('CONNECTED')); });
+  console.log(`Student without the code: ${refused === 'CONNECTED' ? 'LET IN (wrong)' : `refused ("${refused}")`}`);
+  if (refused === 'CONNECTED') process.exitCode = 1;
+
   // The dropped students come back; a late student joins after class is well underway.
   dropped.forEach((c) => c.sock.io.engine?.close());
-  const late = connect('late', { sessionId: session.id, dev: { uid: 'late-1', name: 'Late Student' } });
+  const late = connect('late', { sessionId: session.id, code: session.code, dev: { uid: 'late-1', name: 'Late Student' } });
   await late.synced;
   await sleep(2500);
 
@@ -130,7 +136,7 @@ async function main() {
   console.log(`Board seq ${teacher.board.state.seq}, pages ${teacher.board.state.pages}`);
 
   [teacher, ...everyone].forEach((c) => c.sock.disconnect());
-  process.exit(mismatched.length ? 1 : 0);
+  process.exit(mismatched.length || process.exitCode ? 1 : 0);
 }
 
 main().catch((e) => {
