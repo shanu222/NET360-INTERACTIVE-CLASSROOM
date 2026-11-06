@@ -208,7 +208,7 @@ export function buildRoom(opts: { shadows: boolean }): Room {
     [T.plateLens(), 1.3, 0.98, 4.85, 1.58],
   ];
   for (const [art, w, h, x, y] of plates) {
-    const f = framed(art, w, h, '#1f1813', true, 0.35);
+    const f = framed(art, w, h, '#c9a24a', false, 0.85);
     f.position.set(x, y, 0.03);
     g.add(f);
   }
@@ -264,10 +264,10 @@ export function buildRoom(opts: { shadows: boolean }): Room {
 
   /* ---------- quotations from scientists, between the windows and the paintings ---------- */
   // [quote, author, note] with where each hangs: [wall x, z]
-  const spots: [number, number][] = [[-W / 2 + 0.03, 5.8], [-W / 2 + 0.03, 10.2], [W / 2 - 0.03, 6.95], [W / 2 - 0.03, 11.55]];
+  const spots: [number, number][] = [[-W / 2 + 0.03, 5.8], [-W / 2 + 0.03, 10.2], [W / 2 - 0.03, 6.95], [W / 2 - 0.03, 11.25]];
   const quotes = QUOTES.map(([q, a, n], i) => [q, a, n, spots[i][0], spots[i][1]] as const);
   for (const [q, a, n, x, z] of quotes) {
-    const f = framed(T.quotePlate(q, a, n), 1.6, 1.1, '#2a2119', false, 0.4);
+    const f = framed(T.quotePlate(q, a, n), 1.85, 1.27, '#c9a24a', false, 0.85);
     f.position.set(x, 2.55, z);
     f.rotation.y = x < 0 ? Math.PI / 2 : -Math.PI / 2;
     g.add(f);

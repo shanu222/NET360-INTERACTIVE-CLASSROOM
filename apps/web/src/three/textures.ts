@@ -17,7 +17,7 @@ function make(w: number, h: number): [HTMLCanvasElement, Ctx] {
 function tex(c: HTMLCanvasElement, repeat?: [number, number]): CanvasTexture {
   const t = new CanvasTexture(c);
   t.colorSpace = SRGBColorSpace;
-  t.anisotropy = 8;
+  t.anisotropy = 16; // sharper at a slant (the renderer caps it to what the GPU supports)
   if (repeat) {
     t.wrapS = t.wrapT = RepeatWrapping;
     t.repeat.set(repeat[0], repeat[1]);
@@ -671,33 +671,31 @@ function wrap(ctx: Ctx, text: string, width: number): string[] {
 export function quotePlate(quote: string, author: string, note: string): Texture {
   const W = 1600, H = 1100;
   const [c, ctx] = paper(W, H);
-  // a thin gold rule inside the edge
-  ctx.strokeStyle = 'rgba(176,132,60,0.9)';
-  ctx.lineWidth = 6;
-  ctx.strokeRect(40, 40, W - 80, H - 80);
-  ctx.fillStyle = '#b8862f';
-  ctx.font = 'italic 500 260px Fraunces, Georgia, serif';
+  // a gold rule inside the edge
+  ctx.strokeStyle = GOLD;
+  ctx.lineWidth = 10;
+  ctx.strokeRect(46, 46, W - 92, H - 92);
+  ctx.fillStyle = GOLD;
+  ctx.font = '700 300px Fraunces, Georgia, serif';
   ctx.textAlign = 'left';
-  ctx.fillText('“', 90, 300);
-  ctx.fillStyle = '#17110c';
-  let size = 128;
+  ctx.fillText('“', 92, 330);
+  ctx.fillStyle = '#ffffff';
+  let size = 150;
   let lines: string[] = [];
-  for (; size >= 80; size -= 4) {
-    ctx.font = `italic 600 ${size}px Fraunces, Georgia, serif`;
-    lines = wrap(ctx, quote, W - 300);
-    if (lines.length * size * 1.18 < H - 470) break;
+  for (; size >= 90; size -= 4) {
+    ctx.font = `700 ${size}px Fraunces, Georgia, serif`;
+    lines = wrap(ctx, quote, W - 330);
+    if (lines.length * size * 1.16 < H - 430) break;
   }
-  const top = 250 + size * 0.85;
-  lines.forEach((l, i) => ctx.fillText(l, 170, top + i * size * 1.18));
-  const y = top + (lines.length - 1) * size * 1.18 + 120;
-  ctx.fillStyle = '#b8862f';
-  ctx.fillRect(170, y - 20, 120, 8);
-  ctx.fillStyle = '#17110c';
-  ctx.font = '700 76px Inter, system-ui, sans-serif';
-  ctx.fillText(author, 170, y + 62);
-  ctx.fillStyle = '#4a3c2e';
-  ctx.font = '500 46px Inter, system-ui, sans-serif';
-  ctx.fillText(note, 170, y + 130, W - 340);
+  const top = 210 + size * 0.85;
+  lines.forEach((l, i) => ctx.fillText(l, 190, top + i * size * 1.16));
+  const y = top + (lines.length - 1) * size * 1.16 + 150;
+  ctx.fillStyle = GOLD;
+  ctx.font = '800 92px Inter, system-ui, sans-serif';
+  ctx.fillText(`— ${author}`, 190, y);
+  ctx.fillStyle = '#c9d6ee';
+  ctx.font = '600 50px Inter, system-ui, sans-serif';
+  ctx.fillText(note, 190, y + 76, W - 360);
   return tex(c);
 }
 
@@ -706,9 +704,9 @@ export function inscription(text: string, author: string): Texture {
   const W = 2400, H = 260;
   const [c, ctx] = make(W, H);
   ctx.clearRect(0, 0, W, H);
-  ctx.fillStyle = '#2b1f15';
+  ctx.fillStyle = '#132a52';
   ctx.textAlign = 'center';
-  ctx.font = 'italic 600 118px Fraunces, Georgia, serif';
+  ctx.font = 'italic 800 124px Fraunces, Georgia, serif';
   ctx.fillText(text, W / 2, 130, W - 80);
   ctx.font = '700 46px Inter, system-ui, sans-serif';
   ctx.letterSpacing = '12px';
@@ -725,18 +723,23 @@ export function inscription(text: string, author: string): Texture {
 /* Scientific plates — engraved line art on ivory                      */
 /* ------------------------------------------------------------------ */
 
-const INK = '#21180f';
+const INK = '#fff7e6';
 
+/** Prints with writing: deep navy with light, bold lettering — readable from the back row. */
 function paper(w: number, h: number): [HTMLCanvasElement, Ctx] {
   const [c, ctx] = make(w, h);
-  ctx.fillStyle = '#f3ecdf';
+  const g = ctx.createLinearGradient(0, 0, w, h);
+  g.addColorStop(0, '#173058');
+  g.addColorStop(1, '#0d1a33');
+  ctx.fillStyle = g;
   ctx.fillRect(0, 0, w, h);
-  grain(ctx, w, h, 8, 17);
+  grain(ctx, w, h, 5, 17);
   return [c, ctx];
 }
+const GOLD = '#f6c453';
 
 function caption(ctx: Ctx, text: string, w: number, y: number) {
-  ctx.fillStyle = INK;
+  ctx.fillStyle = GOLD;
   ctx.globalAlpha = 1;
   ctx.textAlign = 'center';
   ctx.font = '700 30px Inter, system-ui, sans-serif';
@@ -749,8 +752,8 @@ function caption(ctx: Ctx, text: string, w: number, y: number) {
 export function plateMaxwell(): Texture {
   const [c, ctx] = paper(480, 560);
   ctx.strokeStyle = INK;
-  ctx.globalAlpha = 0.5;
-  ctx.lineWidth = 1.5;
+  ctx.globalAlpha = 0.75;
+  ctx.lineWidth = 3.3;
   ctx.beginPath();
   ctx.moveTo(80, 120);
   ctx.lineTo(400, 120);
@@ -760,9 +763,9 @@ export function plateMaxwell(): Texture {
   ctx.globalAlpha = 1;
   ctx.fillStyle = INK;
   ctx.textAlign = 'center';
-  ctx.font = 'italic 600 46px Fraunces, Georgia, serif';
+  ctx.font = 'italic 700 50px Fraunces, Georgia, serif';
   ['∇ · E = ρ / ε₀', '∇ · B = 0', '∇ × E = − ∂B/∂t'].forEach((l, i) => ctx.fillText(l, 240, 190 + i * 66, 420));
-  ctx.font = 'italic 600 36px Fraunces, Georgia, serif';
+  ctx.font = 'italic 700 38px Fraunces, Georgia, serif';
   ctx.fillText('∇ × B = μ₀J + μ₀ε₀ ∂E/∂t', 240, 388, 440);
   caption(ctx, 'MAXWELL · 1865', 480, 500);
   return tex(c);
@@ -771,8 +774,8 @@ export function plateMaxwell(): Texture {
 export function plateEuler(): Texture {
   const [c, ctx] = paper(480, 560);
   ctx.strokeStyle = INK;
-  ctx.lineWidth = 2;
-  ctx.globalAlpha = 0.55;
+  ctx.lineWidth = 4.4;
+  ctx.globalAlpha = 0.75;
   ctx.beginPath();
   ctx.moveTo(90, 230);
   ctx.lineTo(390, 230);
@@ -811,13 +814,13 @@ export function plateSpiral(): Texture {
   ctx.translate(64, 50);
   ctx.scale(2.95, 2.95);
   ctx.strokeStyle = INK;
-  ctx.lineWidth = 0.6;
+  ctx.lineWidth = 1.32;
   ctx.strokeRect(0, 0, 144, 89);
-  ctx.globalAlpha = 0.5;
-  ctx.lineWidth = 0.35;
+  ctx.globalAlpha = 0.75;
+  ctx.lineWidth = 0.77;
   for (const [x, y, s] of [[0, 0, 89], [89, 0, 55], [110, 55, 34], [89, 68, 21], [89, 55, 13], [102, 55, 8], [105, 63, 5]]) ctx.strokeRect(x, y, s, s);
   ctx.globalAlpha = 1;
-  ctx.lineWidth = 0.9;
+  ctx.lineWidth = 1.98;
   ctx.beginPath();
   ctx.arc(89, 89, 89, Math.PI, Math.PI * 1.5);
   ctx.arc(89, 55, 55, Math.PI * 1.5, 0);
@@ -834,9 +837,9 @@ export function plateSpiral(): Texture {
 export function plateLens(): Texture {
   const [c, ctx] = paper(560, 420);
   ctx.strokeStyle = INK;
-  ctx.lineWidth = 2;
+  ctx.lineWidth = 4.4;
   ctx.setLineDash([8, 8]);
-  ctx.globalAlpha = 0.5;
+  ctx.globalAlpha = 0.75;
   ctx.beginPath();
   ctx.moveTo(40, 200);
   ctx.lineTo(520, 200);
@@ -846,7 +849,7 @@ export function plateLens(): Texture {
   ctx.beginPath();
   ctx.ellipse(280, 200, 20, 130, 0, 0, Math.PI * 2);
   ctx.stroke();
-  ctx.lineWidth = 3;
+  ctx.lineWidth = 6.6;
   ctx.beginPath();
   ctx.moveTo(120, 200);
   ctx.lineTo(120, 115);
@@ -859,7 +862,7 @@ export function plateLens(): Texture {
   ctx.lineTo(440, 272);
   ctx.lineTo(452, 256);
   ctx.stroke();
-  ctx.lineWidth = 1.6;
+  ctx.lineWidth = 3.52;
   ctx.beginPath();
   ctx.moveTo(120, 115);
   ctx.lineTo(280, 115);
