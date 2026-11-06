@@ -69,6 +69,17 @@ export default function Join() {
     };
   }, [scanning]);
 
+  // Signed in on this card? Go straight in — no extra tap.
+  const signedOutHere = useRef(false);
+  useEffect(() => {
+    if (ready && !user) signedOutHere.current = true;
+    if (user && found && signedOutHere.current && !entering) {
+      signedOutHere.current = false;
+      enter();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, user, found]);
+
   const enter = () => {
     if (!found) return;
     setEntering(true);

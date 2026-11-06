@@ -1026,3 +1026,74 @@ svg { display: block; }
 .classcard__teacher small { font-size: 12.5px; color: var(--ink-soft); }
 .scan__view { position: relative; margin-top: 16px; }
 .scan__view .scan__frame { margin: 18%; }
+
+/* Teacher writes straight onto the 3D board */
+.room3d__board--write { pointer-events: auto; touch-action: none; cursor: crosshair; }
+.room3d__board--write.tool-eraser { cursor: none; }
+
+/* Student: Desk ↔ Board zoom */
+.zoombar {
+  position: fixed;
+  left: max(16px, env(safe-area-inset-left));
+  bottom: max(16px, env(safe-area-inset-bottom));
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 99px;
+  background: var(--glass);
+  backdrop-filter: blur(14px);
+  color: var(--ivory);
+  box-shadow: 0 12px 30px -10px rgba(0, 0, 0, 0.55);
+  transition: opacity 0.5s;
+}
+.zoombar.is-idle { opacity: 0.45; }
+.zoombar button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 40px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 99px;
+  background: none;
+  color: rgba(245, 239, 228, 0.75);
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.zoombar button svg { width: 18px; height: 18px; }
+.zoombar button.is-on { background: rgba(245, 239, 228, 0.16); color: var(--ivory); }
+.zoombar__hint { padding: 0 10px 0 6px; font-size: 12px; color: rgba(245, 239, 228, 0.55); }
+@media (max-width: 700px) { .zoombar__hint { display: none; } }
+
+/* Teacher: Room ↔ Board switch in the top bar */
+.seg {
+  display: flex;
+  padding: 3px;
+  border-radius: 99px;
+  background: rgba(245, 239, 228, 0.08);
+  border: 1px solid var(--glass-line);
+}
+.seg button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 99px;
+  background: none;
+  color: rgba(245, 239, 228, 0.7);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.seg button svg { width: 15px; height: 15px; }
+.seg button.is-on { background: rgba(245, 239, 228, 0.16); color: var(--ivory); }
+.console--3d { grid-template-columns: 76px minmax(0, 1fr) 88px; }
+.console--3d { pointer-events: none; }
+.console--3d > * { pointer-events: auto; }
+.console--3d .console__board { pointer-events: none; align-self: end; }
+.console--3d .pagebar { pointer-events: auto; }
+.stage3d--teacher .console-bar { background: linear-gradient(180deg, rgba(20, 16, 12, 0.78), rgba(20, 16, 12, 0)); }
+.stage3d--teacher.tool-eraser .room3d__board--write { cursor: none; }

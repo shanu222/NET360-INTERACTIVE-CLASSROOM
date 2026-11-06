@@ -275,6 +275,11 @@ export interface SocketAuth {
   dev?: { uid: string; name: string };
   /** Board display key (from the teacher's "open board" link). */
   boardKey?: string;
+  /**
+   * Which screen is connecting. The student page always joins as a student — even
+   * with the teacher's own account (so one person can try both sides).
+   */
+  as?: 'teacher' | 'student';
   clientId: string;
 }
 

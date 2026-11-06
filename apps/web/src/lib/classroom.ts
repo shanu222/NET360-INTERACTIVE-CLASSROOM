@@ -26,7 +26,10 @@ export interface Classroom {
  * The board session stays in sync across reconnects: on every (re)connect it
  * asks for what it missed and gets either the missing events or a snapshot.
  */
-export function useClassroom(sessionId: string | undefined, opts: { boardKey?: string; enabled?: boolean } = {}): Classroom {
+export function useClassroom(
+  sessionId: string | undefined,
+  opts: { boardKey?: string; enabled?: boolean; as?: 'teacher' | 'student' } = {},
+): Classroom {
   const { socketAuth } = useAuth();
   const authRef = useRef(socketAuth);
   authRef.current = socketAuth;
@@ -53,8 +56,8 @@ export function useClassroom(sessionId: string | undefined, opts: { boardKey?: s
       auth: (cb) => {
         authRef
           .current()
-          .then((a) => cb({ sessionId, clientId, boardKey: opts.boardKey, ...a }))
-          .catch(() => cb({ sessionId, clientId, boardKey: opts.boardKey }));
+          .then((a) => cb({ sessionId, clientId, boardKey: opts.boardKey, as: opts.as, ...a }))
+          .catch(() => cb({ sessionId, clientId, boardKey: opts.boardKey, as: opts.as }));
       },
     };
     // Same origin in local dev; the Railway server's URL when split-hosted.

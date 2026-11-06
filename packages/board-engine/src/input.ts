@@ -48,6 +48,8 @@ export class PenInput {
     private session: BoardSession,
     private renderer: BoardRenderer,
     private settings: () => PenSettings,
+    /** Map a screen point to board units — e.g. through the 3D classroom's board. */
+    private opts: { map?: (clientX: number, clientY: number) => [number, number] } = {},
   ) {
     el.addEventListener('pointerdown', this.down);
     el.addEventListener('pointermove', this.move);
@@ -64,6 +66,10 @@ export class PenInput {
     this.el.removeEventListener('pointercancel', this.up);
     this.el.removeEventListener('pointerleave', this.leave);
     this.renderer.overlay = null;
+  }
+
+  private toBoard(x: number, y: number): [number, number] {
+    return this.opts.map ? this.opts.map(x, y) : this.renderer.toBoard(x, y);
   }
 
   /* ---------------- history ---------------- */
@@ -124,7 +130,7 @@ export class PenInput {
     e.preventDefault();
     this.el.setPointerCapture(e.pointerId);
     const cfg = this.settings();
-    const [x, y] = this.renderer.toBoard(e.clientX, e.clientY);
+    const [x, y] = this.toBoard(e.clientX, e.clientY);
 
     if (cfg.tool === 'eraser' || e.button === 5 || (e.buttons & 32) !== 0) {
       this.erasing = { pointerId: e.pointerId, hits: new Set(), queued: [] };
@@ -160,7 +166,7 @@ export class PenInput {
 
     if (this.erasing && e.pointerId === this.erasing.pointerId) {
       for (const s of list) {
-        const [x, y] = this.renderer.toBoard(s.clientX, s.clientY);
+        const [x, y] = this.toBoard(s.clientX, s.clientY);
         this.eraseAt(x, y);
         this.cursor = [x, y];
       }
@@ -169,19 +175,19 @@ export class PenInput {
     }
     if (!this.active || e.pointerId !== this.active.pointerId) {
       if (this.settings().tool === 'eraser' && this.enabled) {
-        this.cursor = this.renderer.toBoard(e.clientX, e.clientY);
+        this.cursor = this.toBoard(e.clientX, e.clientY);
         this.renderer.invalidateLive();
       }
       return;
     }
     const a = this.active;
     if (a.shapeStart) {
-      a.shapeEnd = this.renderer.toBoard(e.clientX, e.clientY);
+      a.shapeEnd = this.toBoard(e.clientX, e.clientY);
       this.renderer.invalidateLive();
       return;
     }
     for (const s of list) {
-      const [x, y] = this.renderer.toBoard(s.clientX, s.clientY);
+      const [x, y] = this.toBoard(s.clientX, s.clientY);
       const q = encodeAbs(x, y, this.pressure(s));
       const dx = q[0] - a.lastQ[0];
       const dy = q[1] - a.lastQ[1];

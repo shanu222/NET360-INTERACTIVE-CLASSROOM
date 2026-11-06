@@ -206,7 +206,10 @@ io.use(async (socket, next) => {
   }
   const user = await verifyUser(auth.idToken, auth.dev);
   if (!user) return next(new Error('Please sign in to join the class.'));
-  Object.assign(data, { role: user.uid === s.teacherUid ? 'teacher' : 'student', uid: user.uid, name: user.name });
+  const isTeacher = user.uid === s.teacherUid && auth.as !== 'student';
+  // The teacher's account opened from a student screen joins as a separate student.
+  const uid = user.uid === s.teacherUid && !isTeacher ? `${user.uid}#student` : user.uid;
+  Object.assign(data, { role: isTeacher ? 'teacher' : 'student', uid, name: user.name });
   next();
 });
 

@@ -12,6 +12,7 @@ import { Board } from '../components/Board.tsx';
 import { SignIn } from '../components/SignIn.tsx';
 import { Lobby } from '../components/Lobby.tsx';
 import { Icon } from '../components/Icons.tsx';
+import type { ZoomCommand } from '../three/Classroom3D.tsx';
 
 /**
  * The student's classroom: the 3D room with the live board, classmates at
@@ -22,7 +23,7 @@ export default function Student() {
   const loc = useLocation();
   const nav = useNavigate();
   const { ready, user } = useAuth();
-  const room = useClassroom(sessionId, { enabled: Boolean(user) });
+  const room = useClassroom(sessionId, { enabled: Boolean(user), as: 'student' });
   const [renderer, setRenderer] = useState<BoardRenderer | null>(null);
   const pg = usePageInfo(room.board, renderer);
   const idle = useIdle(3200);
@@ -30,6 +31,10 @@ export default function Student() {
   const [toast, setToast] = useState('');
   const [hideHint, setHideHint] = useState(false);
   const [in3d, setIn3d] = useState(prefers3d);
+  // 0 = from my desk, 1 = the board fills the screen
+  const [zoomCmd, setZoomCmd] = useState<ZoomCommand>({ t: 0, n: 0 });
+  const [atBoard, setAtBoard] = useState(false);
+  const zoomTo = (t: number) => setZoomCmd((z) => ({ t, n: z.n + 1 }));
   const entering = Boolean((loc.state as { entering?: boolean } | null)?.entering);
 
   if (ready && !user) {
@@ -196,6 +201,9 @@ export default function Student() {
               people={room.people}
               teacherName={info?.teacherName ?? null}
               hideUid={room.welcome?.me.uid}
+              seat={room.people.find((p) => p.uid === room.welcome?.me.uid)?.seat ?? null}
+              zoom={zoomCmd}
+              onZoom={(t) => setAtBoard(t > 0.5)}
               onRenderer={setRenderer}
             >
               {onBoard}
@@ -203,6 +211,15 @@ export default function Student() {
           </motion.div>
         </Suspense>
         {controls}
+        <div className={`zoombar ${idle ? 'is-idle' : ''}`} role="group" aria-label="View">
+          <button className={!atBoard ? 'is-on' : ''} onClick={() => zoomTo(0)}>
+            <Icon.desk /> My desk
+          </button>
+          <button className={atBoard ? 'is-on' : ''} onClick={() => zoomTo(1)}>
+            <Icon.zoom /> Board
+          </button>
+          <span className="zoombar__hint">Scroll or pinch to zoom</span>
+        </div>
       </div>
     );
   }

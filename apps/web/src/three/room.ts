@@ -232,7 +232,8 @@ export function buildRoom(opts: { shadows: boolean }): Room {
   g.add(tDesk);
 
   /* ---------- student desks and chairs (instanced: one draw call each) ---------- */
-  const cols = [-4.2, -2.52, -0.84, 0.84, 2.52, 4.2];
+  // First come, first seated: front row first, filling from the centre outwards.
+  const cols = [-0.84, 0.84, -2.52, 2.52, -4.2, 4.2];
   const rows = [3.7, 5.1, 6.5, 7.9, 9.3, 10.7, 12.1];
   const seats: Vector3[] = [];
   for (const z of rows) for (const x of cols) seats.push(new Vector3(x, 0.47, z + 0.62));

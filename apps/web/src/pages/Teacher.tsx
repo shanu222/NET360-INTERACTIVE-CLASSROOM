@@ -30,7 +30,7 @@ export default function Teacher() {
   const nav = useNavigate();
   const { ready, user, headers } = useAuth();
   const [boardKey, setBoardKey] = useState<string | undefined>((loc.state as { boardKey?: string } | null)?.boardKey);
-  const room = useClassroom(sessionId, { enabled: Boolean(user) });
+  const room = useClassroom(sessionId, { enabled: Boolean(user), as: 'teacher' });
   const [renderer, setRenderer] = useState<BoardRenderer | null>(null);
   const pg = usePageInfo(room.board, renderer);
   const [pen, setPen] = useState<PenSettings>({ tool: 'pen', color: INK.chalk, width: 4.4 });
@@ -40,6 +40,8 @@ export default function Teacher() {
   const [hist, setHist] = useState({ undo: false, redo: false });
   const [writing, setWriting] = useState(false);
   const [panel, setPanel] = useState<'join' | 'class' | null>(null);
+  // 'room': the 3D classroom, writing straight onto its board · 'board': the large flat board
+  const [mode, setMode] = useState<'room' | 'board'>(() => (can3d() ? 'room' : 'board'));
   const [copied, setCopied] = useState(false);
   const [confirmEnd, setConfirmEnd] = useState(false);
 
@@ -52,7 +54,7 @@ export default function Teacher() {
   // Attach pen input once the board is up and we are confirmed as the teacher.
   const canWrite = room.welcome?.canWrite ?? false;
   useEffect(() => {
-    if (!renderer || !canWrite) return;
+    if (!renderer || !canWrite || mode !== 'board') return;
     const host = renderer.live.parentElement!;
     const pi = new PenInput(host, room.board, renderer, () => penRef.current);
     pi.onHistory = (u, r) => setHist({ undo: u, redo: r });
@@ -75,7 +77,7 @@ export default function Teacher() {
       pi.destroy();
       setInput(null);
     };
-  }, [renderer, canWrite, room.board]);
+  }, [renderer, canWrite, room.board, mode]);
 
   const goPage = (p: number) => room.board.local({ t: 'pg', pg: p });
   const newPage = () => room.board.local({ t: 'pn' });
@@ -149,8 +151,8 @@ export default function Teacher() {
     }
   };
 
-  return (
-    <Environment variant="console">
+  const body = (
+    <>
       <header className="console-bar">
         <div className="console-bar__title">
           <span className="brand__mark" />
@@ -164,6 +166,16 @@ export default function Teacher() {
           )}
         </div>
         <div className="console-bar__right">
+          {can3d() && (
+            <div className="seg" role="tablist" aria-label="View">
+              <button className={mode === 'room' ? 'is-on' : ''} onClick={() => setMode('room')} title="Write in the 3D classroom">
+                <Icon.cube /> Classroom
+              </button>
+              <button className={mode === 'board' ? 'is-on' : ''} onClick={() => setMode('board')} title="Write on the large board">
+                <Icon.board /> Board
+              </button>
+            </div>
+          )}
           <StatusPill status={room.status} />
           <span className="pill" title="Students in the classroom">
             <Icon.users /> {room.cls?.present ?? 0}
@@ -174,7 +186,7 @@ export default function Teacher() {
         </div>
       </header>
 
-      <div className="console">
+      <div className={`console ${mode === 'room' ? 'console--3d' : ''}`}>
         <PenDock
           pen={pen}
           setPen={setPen}
@@ -187,7 +199,7 @@ export default function Teacher() {
         />
 
         <div className="console__board">
-          <Board board={room.board} onRenderer={setRenderer} writable={canWrite} className={`tool-${pen.tool}`} />
+          {mode === 'board' && <Board board={room.board} onRenderer={setRenderer} writable={canWrite} className={`tool-${pen.tool}`} />}
           <div className={`pagebar ${writing ? 'is-quiet' : ''}`}>
             <button aria-label="Previous page" disabled={pg.live === 0} onClick={() => goPage(pg.live - 1)}>
               <Icon.left />
@@ -319,6 +331,29 @@ export default function Teacher() {
           </div>
         </div>
       )}
-    </Environment>
+    </>
   );
+
+  if (mode === 'room') {
+    return (
+      <div className={`stage3d stage3d--teacher tool-${pen.tool}`}>
+        <Suspense fallback={<div className="stage3d__loading" />}>
+          <Classroom3D
+            view="teacher"
+            board={room.board}
+            people={room.people}
+            teacherName={info?.teacherName ?? null}
+            pen={canWrite ? () => penRef.current : undefined}
+            onPen={(pi) => {
+              setInput(pi);
+              if (pi) pi.onHistory = (u, r) => setHist({ undo: u, redo: r });
+            }}
+            onRenderer={setRenderer}
+          />
+        </Suspense>
+        {body}
+      </div>
+    );
+  }
+  return <Environment variant="console">{body}</Environment>;
 }
