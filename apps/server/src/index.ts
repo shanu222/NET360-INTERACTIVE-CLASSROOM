@@ -495,7 +495,7 @@ async function start() {
   }
   http.listen(config.port, '0.0.0.0', () => {
     console.log(
-      `[version ${VERSION}] NET360 Classroom server on :${config.port} — auth: ${authMode}, database: ${dbEnabled ? 'Cloudflare D1' : 'memory only'}${r2Enabled ? ' + R2' : ''}, class audio: ${mediaEnabled ? 'on' : 'off'}`,
+      `[version ${VERSION}] Meeto360 server on :${config.port} — auth: ${authMode}, database: ${dbEnabled ? 'Cloudflare D1' : 'memory only'}${r2Enabled ? ' + R2' : ''}, class audio: ${mediaEnabled ? 'on' : 'off'}`,
     );
   });
 }

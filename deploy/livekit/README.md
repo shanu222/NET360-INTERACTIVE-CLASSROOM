@@ -35,7 +35,7 @@ Unlimited class audio for the price of a small server, instead of paying per min
 - Installs Docker.
 - Opens these ports: 22, 80, 443, 7881/tcp, 3478/udp, 30000–40000/udp and 50000–60000/udp.
   If your provider also has a **cloud firewall** (in its web dashboard), open the same ports there.
-- Creates private API keys (kept in `/opt/net360-livekit/.env`).
+- Creates private API keys (kept in `/opt/meeto360-livekit/.env`).
 - Runs LiveKit (v1.13.11) and Caddy, which gets and renews the HTTPS certificate automatically.
 - Restarts both automatically after a reboot.
 
@@ -44,7 +44,7 @@ Running it again is safe: it keeps the same keys.
 ## Useful commands (on the server)
 
 ```bash
-cd /opt/net360-livekit
+cd /opt/meeto360-livekit
 docker compose ps             # are both running?
 docker compose logs -f        # live logs
 docker compose pull && docker compose up -d   # update

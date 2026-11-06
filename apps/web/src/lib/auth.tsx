@@ -4,7 +4,7 @@ import type { Auth, User as FbUser } from 'firebase/auth';
 import { apiPath } from './env.ts';
 
 /**
- * Sign-in for NET360 Classroom.
+ * Sign-in for Meeto360.
  *  - Production: Firebase Auth (Google sign-in), the server verifies the ID token.
  *  - Local development without Firebase: a name is enough (the server runs in dev mode).
  * The mode comes from the server's /api/config so client and server always agree.

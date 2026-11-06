@@ -94,7 +94,7 @@ export default function Join() {
             <div className="brand">
               <span className="brand__mark" />
               <span>
-                NET360 <em>Classroom</em>
+                Meeto<em>360</em>
               </span>
             </div>
 

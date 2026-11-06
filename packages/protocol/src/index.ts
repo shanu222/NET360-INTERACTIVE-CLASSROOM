@@ -1,5 +1,5 @@
 /**
- * NET360 Classroom — shared real-time protocol.
+ * Meeto360 — shared real-time protocol.
  *
  * The board is never sent as images or video. Every change is a small event;
  * the server stamps each one with a sequence number, and every client folds

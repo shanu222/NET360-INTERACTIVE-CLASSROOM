@@ -14,7 +14,7 @@ export const config = {
   },
   /**
    * Comma-separated Google accounts allowed to start classes and teach. With Firebase
-   * sign-in on and nothing set, only the NET360 admin account may teach. (Local dev
+   * sign-in on and nothing set, only the Meeto360 admin account may teach. (Local dev
    * without Firebase lets anyone teach.)
    */
   teacherEmails: (env.TEACHER_EMAILS || (env.FIREBASE_PROJECT_ID ? 'shahnawaz9974balouch@gmail.com' : ''))
@@ -38,7 +38,7 @@ export const config = {
 
   /**
    * Web origins allowed to call this server, comma-separated.
-   * e.g. ALLOWED_ORIGINS=https://classroom.net360.pk,https://net360-classroom.vercel.app
+   * e.g. ALLOWED_ORIGINS=https://meeto360.com,https://www.meeto360.com
    * A leading "*." matches subdomains (e.g. *.vercel.app for preview deployments).
    * Empty = allow any origin (fine for local development only).
    */

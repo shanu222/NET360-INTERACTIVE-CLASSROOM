@@ -36,9 +36,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build the Railway image
-        run: docker build -f apps/server/Dockerfile -t net360-server .
+        run: docker build -f apps/server/Dockerfile -t meeto360-server .
       - name: Smoke test the image
         run: |
-          docker run -d -p 4000:4000 -e PORT=4000 --name srv net360-server
+          docker run -d -p 4000:4000 -e PORT=4000 --name srv meeto360-server
           for i in $(seq 1 30); do curl -sf http://localhost:4000/api/health && exit 0; sleep 1; done
           docker logs srv; exit 1

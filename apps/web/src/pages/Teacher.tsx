@@ -229,7 +229,7 @@ export default function Teacher() {
           <div className="brand">
             <span className="brand__mark" />
             <span>
-              NET360 <em>Classroom</em>
+              Meeto<em>360</em>
             </span>
           </div>
           <h1 className="card__title">Open your classroom</h1>
@@ -246,7 +246,7 @@ export default function Teacher() {
   const openBoard = async () => {
     if (!sessionId || !boardKey) return;
     const url = boardUrl(sessionId, boardKey);
-    window.open(url, 'net360-board');
+    window.open(url, 'meeto360-board');
     try {
       await navigator.clipboard.writeText(url);
       setCopied(true);

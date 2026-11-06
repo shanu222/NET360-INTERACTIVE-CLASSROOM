@@ -47,7 +47,7 @@ export default function BoardDisplay() {
               {big && <p className="joincard__eyebrow">Join the class</p>}
               <Code code={info.code} />
               <p className="joincard__hint">
-                {big ? 'Scan with your phone camera, or open NET360 and enter the code.' : 'Scan to join'}
+                {big ? 'Scan with your phone camera, or open Meeto360 and enter the code.' : 'Scan to join'}
               </p>
               {big && (
                 <p className="joincard__count">

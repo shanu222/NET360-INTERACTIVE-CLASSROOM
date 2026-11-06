@@ -19,7 +19,7 @@ export default function Home() {
   const [topic, setTopic] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
-  // Only the NET360 admin account can start and teach classes.
+  // Only the Meeto360 admin account can start and teach classes.
   const [canTeach, setCanTeach] = useState<boolean | null>(null);
   useEffect(() => {
     if (tab !== 'teach' || !user) return;
@@ -59,7 +59,7 @@ export default function Home() {
         <div className="brand">
           <span className="brand__mark" />
           <span>
-            NET360 <em>Classroom</em>
+            Meeto<em>360</em>
           </span>
         </div>
         <h1 className="card__title">{tab === 'join' ? 'Welcome to class' : 'Open your classroom'}</h1>
@@ -103,7 +103,7 @@ export default function Home() {
         ) : !ready ? (
           <div className="card__loading" />
         ) : !user ? (
-          <SignIn prompt="Teachers sign in with the NET360 admin Google account." />
+          <SignIn prompt="Teachers sign in with the Meeto360 admin Google account." />
         ) : canTeach === null ? (
           <div className="card__loading" />
         ) : !canTeach ? (
@@ -111,7 +111,7 @@ export default function Home() {
             <div className="notice">
               <strong>This account can't start classes</strong>
               <span>
-                You're signed in as {user.email ?? user.name}. Only the NET360 teacher account can teach. To join a lesson, switch to
+                You're signed in as {user.email ?? user.name}. Only the Meeto360 teacher account can teach. To join a lesson, switch to
                 “I'm a student” and enter your class code.
               </span>
             </div>

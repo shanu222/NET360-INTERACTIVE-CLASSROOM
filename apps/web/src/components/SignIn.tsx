@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { useAuth } from '../lib/auth.tsx';
 import { GoogleMark } from './Lobby.tsx';
 
-/** Sign-in: Google (NET360 accounts). A plain name field appears only on a local test server. */
+/** Sign-in: Google accounts. A plain name field appears only on a local test server. */
 export function SignIn({ prompt }: { prompt?: string }) {
   const { mode, signInWithGoogle, signInDev, authError } = useAuth();
   const [name, setName] = useState(localStorage.getItem('n360.dev.name') ?? '');

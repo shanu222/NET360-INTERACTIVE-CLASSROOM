@@ -1,4 +1,4 @@
-# Deploying NET360 Classroom
+# Deploying Meeto360
 
 Three services, set up in this order:
 
@@ -156,3 +156,25 @@ npm run test:restart                  # class survives a mid-lesson restart (use
 ```
 
 To try the split setup locally: run the server with `ALLOWED_ORIGINS=http://localhost:4173 npm start`, build the web app with `VITE_API_URL=http://localhost:4000 npm run build`, then `cd apps/web && npx vite preview --port 4173`.
+
+## Custom domain — meeto360.com
+
+| Address | Points to | Where |
+|---|---|---|
+| `meeto360.com`, `www.meeto360.com` | the web app (Vercel) | Namecheap → Advanced DNS |
+| `api.meeto360.com` | the realtime server (Railway) | Namecheap → Advanced DNS |
+| `audio.meeto360.com` | your LiveKit server (VPS) | Namecheap → Advanced DNS |
+
+1. **Vercel** → project → Settings → Domains → add `meeto360.com` (and let it add
+   `www.meeto360.com` → redirect to `meeto360.com`). Copy the DNS records Vercel shows.
+2. **Railway** → service → Settings → Networking → Custom Domain → `api.meeto360.com`.
+   Copy the CNAME (and the `_railway-verify` TXT record if shown).
+3. **Namecheap** → Domain List → meeto360.com → Advanced DNS: delete the two parking
+   records, then add the records from steps 1–2 (and an A record `audio` → your VPS IP).
+4. **Vercel env:** `VITE_API_URL=https://api.meeto360.com`,
+   `VITE_FIREBASE_AUTH_DOMAIN=meeto360.com` → redeploy.
+5. **Railway env:** `ALLOWED_ORIGINS=https://meeto360.com,https://www.meeto360.com,https://net360-interactive-classroom.vercel.app`
+6. **Firebase** → Authentication → Settings → Authorized domains: add `meeto360.com`, `www.meeto360.com`.
+7. **Google Cloud** → APIs & Services → Credentials → the Web OAuth client: add
+   `https://meeto360.com` to Authorized JavaScript origins and
+   `https://meeto360.com/__/auth/handler` to Authorized redirect URIs.

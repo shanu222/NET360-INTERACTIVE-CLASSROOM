@@ -2,7 +2,7 @@
   "name": "net360-interactive-classroom",
   "private": true,
   "version": "0.1.0",
-  "description": "NET360 Interactive Classroom — a physical classroom enhanced by a synchronized digital board.",
+  "description": "Meeto360 — live 3D classes and meetings around one synchronized board.",
   "workspaces": [
     "packages/*",
     "apps/*"

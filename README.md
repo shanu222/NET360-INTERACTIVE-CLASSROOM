@@ -1,4 +1,6 @@
-# NET360 Interactive Classroom
+# Meeto360
+
+*Live classes & meetings — formerly NET360 Interactive Classroom.*
 
 A physical classroom enhanced by a synchronized digital board. The teacher writes on a pen tablet; the handwriting appears instantly on the classroom TV/projector and on every student's phone, tablet or laptop — sent as pen strokes, never as video.
 

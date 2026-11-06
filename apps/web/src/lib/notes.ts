@@ -14,6 +14,6 @@ export async function saveNotesPdf(state: BoardState, info: SessionInfo | undefi
   });
   const date = new Date().toISOString().slice(0, 10);
   const name = [info?.subject, info?.topic, date].filter(Boolean).join(' - ').replace(/[\\/:*?"<>|]+/g, '');
-  pdf.save(`NET360 ${name || 'Notes'}.pdf`);
+  pdf.save(`Meeto360 ${name || 'Notes'}.pdf`);
   return true;
 }

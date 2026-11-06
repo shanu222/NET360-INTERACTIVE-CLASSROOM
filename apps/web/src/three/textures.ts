@@ -212,7 +212,7 @@ export function welcomeBoard(w: number, h: number): HTMLCanvasElement {
   ctx.stroke();
   ctx.font = `400 ${Math.round(h * 0.05)}px Inter, system-ui, sans-serif`;
   ctx.fillStyle = 'rgba(244,241,234,0.6)';
-  ctx.fillText('NET360 Classroom', w / 2, h * 0.64);
+  ctx.fillText('Meeto360', w / 2, h * 0.64);
   return c;
 }
 
@@ -957,7 +957,7 @@ export function clockFace(): Texture {
   ctx.fillStyle = '#6b5d4f';
   ctx.font = '600 13px Inter, sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText('NET360', 128, 88);
+  ctx.fillText('MEETO360', 128, 88);
   return tex(c);
 }
 
