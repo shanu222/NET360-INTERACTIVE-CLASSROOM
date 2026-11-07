@@ -14,6 +14,7 @@ import { SignIn } from '../components/SignIn.tsx';
 import { Code, QR } from '../components/QR.tsx';
 import { Icon } from '../components/Icons.tsx';
 import { StatusPill, friendly } from './Student.tsx';
+import { words } from '../lib/words.ts';
 import { Classroom3D, can3d, prefers3d, roomStudents } from '../lib/webgl.ts';
 import { Lobby } from '../components/Lobby.tsx';
 import { ChatPop, ChatThread, useIncoming, useUnread } from '../components/Chat.tsx';
@@ -64,6 +65,7 @@ export default function Teacher() {
   // Walking around the 3D classroom (writing pauses while walking).
   const [walking, setWalking] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [inviteCopied, setInviteCopied] = useState(false);
   const [confirmEnd, setConfirmEnd] = useState(false);
 
   // Board key survives a page reload through the owner endpoint.
@@ -261,14 +263,15 @@ export default function Teacher() {
               Meeto<em>360</em>
             </span>
           </div>
-          <h1 className="card__title">Open your classroom</h1>
-          <SignIn prompt="Sign in with your teacher account." />
+          <h1 className="card__title">Sign in to host</h1>
+          <SignIn prompt="Sign in with the account that created this meeting or class." />
         </div>
       </Lobby>
     );
   }
 
   const info = room.welcome?.session;
+  const w = words(info?.kind);
   const showJoin = room.cls?.showJoin ?? true;
   const notTeacher = room.welcome && room.welcome.role !== 'teacher';
 
@@ -302,10 +305,10 @@ export default function Teacher() {
         <div className="console-bar__right">
           {can3d() && (
             <div className="seg" role="tablist" aria-label="View">
-              <button className={mode === 'room' && !walking ? 'is-on' : ''} onClick={() => { setMode('room'); setWalking(false); }} title="Write in the 3D classroom">
-                <Icon.cube /> <span>Classroom</span>
+              <button className={mode === 'room' && !walking ? 'is-on' : ''} onClick={() => { setMode('room'); setWalking(false); }} title="Write in the 3D room">
+                <Icon.cube /> <span>Room</span>
               </button>
-              <button className={mode === 'room' && walking ? 'is-on' : ''} onClick={() => { setMode('room'); setWalking(true); }} title="Walk around the class">
+              <button className={mode === 'room' && walking ? 'is-on' : ''} onClick={() => { setMode('room'); setWalking(true); }} title="Walk around the room">
                 <Icon.walk /> <span>Walk</span>
               </button>
               <button className={mode === 'board' ? 'is-on' : ''} onClick={() => { setMode('board'); setWalking(false); }} title="Write on the large board">
@@ -319,14 +322,14 @@ export default function Teacher() {
               disabled={!audioOn || sound.micBusy}
               aria-pressed={sound.micOn}
               onClick={() => void sound.setMic(!sound.micOn)}
-              title={sound.micOn ? 'Students can hear you — click to mute' : 'Turn your microphone on so students can hear you'}
+              title={sound.micOn ? 'Everyone can hear you — click to mute' : 'Turn your microphone on so everyone can hear you'}
             >
               {sound.micOn ? <Icon.mic /> : <Icon.micOff />}
               <span>{!audioOn ? 'Connecting…' : sound.micBusy ? (sound.micOn ? 'Turning off…' : 'Turning on…') : sound.micOn ? 'On air' : 'Mic off'}</span>
             </button>
           )}
           {audioOn && speakers.length > 0 && (
-            <button className="btn btn--ghost btn--sm btn--muteall" onClick={() => room.socket?.emit('muteAll')} title="Turn off every student's microphone">
+            <button className="btn btn--ghost btn--sm btn--muteall" onClick={() => room.socket?.emit('muteAll')} title="Turn off every participant's microphone">
               <Icon.micOff /> <span>Mute all</span>
             </button>
           )}
@@ -341,11 +344,11 @@ export default function Teacher() {
               <Icon.pen /> Tablet
             </span>
           )}
-          <span className="pill" title="Students in the classroom">
+          <span className="pill" title="Participants">
             <Icon.users /> {room.cls?.present ?? 0}
           </span>
           <button className="btn btn--ghost btn--sm btn--end" onClick={() => setConfirmEnd(true)}>
-            End<span>&nbsp;class</span>
+            End<span>&nbsp;{w.thing}</span>
           </button>
         </div>
       </header>
@@ -419,18 +422,18 @@ export default function Teacher() {
         </div>
 
         <aside className={`rail ${writing ? 'is-quiet' : ''}`} aria-label="Class">
-          <button className={`rail__btn ${panel === 'join' ? 'is-on' : ''}`} onClick={() => setPanel(panel === 'join' ? null : 'join')} title="Join code">
+          <button className={`rail__btn ${panel === 'join' ? 'is-on' : ''}`} onClick={() => setPanel(panel === 'join' ? null : 'join')} title="Invite people">
             <Icon.qr />
-            <span>Join</span>
+            <span>Invite</span>
           </button>
-          <button className={`rail__btn ${panel === 'class' ? 'is-on' : ''}`} onClick={() => setPanel(panel === 'class' ? null : 'class')} title="Your class">
+          <button className={`rail__btn ${panel === 'class' ? 'is-on' : ''}`} onClick={() => setPanel(panel === 'class' ? null : 'class')} title="Participants, raised hands and audio">
             <span className={`rail__hand ${hands.length ? 'is-up' : ''}`}>
               <Icon.users />
               {hands.length > 0 && <b>{hands.length}</b>}
             </span>
-            <span>Class</span>
+            <span>People</span>
           </button>
-          <button className={`rail__btn ${panel === 'chat' ? 'is-on' : ''}`} onClick={() => setPanel(panel === 'chat' ? null : 'chat')} title="Message students">
+          <button className={`rail__btn ${panel === 'chat' ? 'is-on' : ''}`} onClick={() => setPanel(panel === 'chat' ? null : 'chat')} title="Message participants">
             <span className={`rail__hand ${unread.total ? 'is-up' : ''}`}>
               <Icon.chat />
               {unread.total > 0 && <b>{unread.total}</b>}
@@ -450,15 +453,15 @@ export default function Teacher() {
             </span>
             <span>Pen</span>
           </button>
-          <button className="rail__btn" onClick={openBoard} disabled={!boardKey} title="Open the classroom board display">
+          <button className="rail__btn" onClick={openBoard} disabled={!boardKey} title="Open the room screen for a TV or projector (link copied)">
             <Icon.display />
-            <span>{copied ? 'Copied' : 'Board'}</span>
+            <span>{copied ? 'Copied' : 'Screen'}</span>
           </button>
 
           <AnimatePresence>
             {panel === 'present' && (
               <motion.div className="panel panel--present" initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 12 }}>
-                <p className="panel__label">Present to the class</p>
+                <p className="panel__label">Present to everyone</p>
                 {sound.status === 'on' && sound.canShare && (
                   <button
                     className={`btn ${sound.sharing ? 'btn--danger' : 'btn--primary'} btn--wide`}
@@ -473,17 +476,17 @@ export default function Teacher() {
                   Slides open large for everyone, and you can write on them. Switch between Whiteboard, Slides and Side by side under the board. From PowerPoint or Google Slides, save as PDF first.
                 </p>
 
-                <p className="panel__label panel__label--gap">Students presenting</p>
+                <p className="panel__label panel__label--gap">Participants presenting</p>
                 {pres?.presenter ? (
                   <div className="presenter">
                     <span className="presenter__dot" />
-                    <span className="presenter__name">{pres.presenterName ?? 'A student'} is presenting</span>
+                    <span className="presenter__name">{pres.presenterName ?? 'A participant'} is presenting</span>
                     <button className="btn btn--ghost btn--sm" onClick={() => room.socket?.emit('presentSet', null)}>
                       Stop
                     </button>
                   </div>
                 ) : (
-                  <p className="muted small">Only you can present. Let a student present below.</p>
+                  <p className="muted small">Only you can present. Let a participant present below.</p>
                 )}
                 {pres?.requests.length ? (
                   <ul className="asks">
@@ -502,14 +505,14 @@ export default function Teacher() {
                 ) : null}
                 {onlineStudents.length > 0 && (
                   <label className="pickpresenter">
-                    <span>Let a student present</span>
+                    <span>Let a participant present</span>
                     <select
                       value=""
                       onChange={(e) => {
                         if (e.target.value) room.socket?.emit('presentSet', e.target.value);
                       }}
                     >
-                      <option value="">Choose a student…</option>
+                      <option value="">Choose a participant…</option>
                       {onlineStudents.map((r) => (
                         <option key={r.uid} value={r.uid}>
                           {r.name}
@@ -547,7 +550,7 @@ export default function Teacher() {
                 {padKey && sessionId ? (
                   <div className="padqr">
                     <QR text={padUrl(sessionId, padKey)} size={132} />
-                    <p className="small">Scan with your phone or iPad and write with a finger or stylus. Only you have this code — don't show it to students.</p>
+                    <p className="small">Scan with your phone or iPad and write with a finger or stylus. Only you have this code — don't share it with participants.</p>
                   </div>
                 ) : (
                   <p className="muted small">Preparing your pad link…</p>
@@ -561,23 +564,23 @@ export default function Teacher() {
                 {thread ? (
                   <>
                     <div className="drawer__head">
-                      <button aria-label="All students" onClick={() => setThread(null)}>
+                      <button aria-label="All participants" onClick={() => setThread(null)}>
                         <Icon.left />
                       </button>
                       <span>
-                        <strong>{threads.find((t) => t.uid === thread)?.name ?? 'Student'}</strong>
-                        <small>{isTyping(thread) ? 'typing…' : threads.find((t) => t.uid === thread)?.online ? 'In class' : 'Left the class'}</small>
+                        <strong>{threads.find((t) => t.uid === thread)?.name ?? 'Participant'}</strong>
+                        <small>{isTyping(thread) ? 'typing…' : threads.find((t) => t.uid === thread)?.online ? `In the ${w.thing}` : `Left the ${w.thing}`}</small>
                       </span>
                     </div>
                     <ChatThread
                       messages={room.chats.filter((m) => otherOf(m) === thread)}
                       me={me}
                       placeholder="Write a private message…"
-                      empty="Only this student will see your message."
+                      empty="Only this person will see your message."
                       autoFocus
                       seenAt={me ? room.seen[`${thread}|${me}`] ?? 0 : 0}
                       typing={isTyping(thread)}
-                      typingLabel={threads.find((t) => t.uid === thread)?.name ?? 'Student'}
+                      typingLabel={threads.find((t) => t.uid === thread)?.name ?? 'Participant'}
                       onSend={(text) => room.sendChat(text, thread)}
                       onRetry={room.retryChat}
                       onTyping={() => room.sendTyping(thread)}
@@ -586,9 +589,9 @@ export default function Teacher() {
                   </>
                 ) : (
                   <>
-                    <p className="panel__label">Message a student</p>
+                    <p className="panel__label">Message a participant</p>
                     {threads.length === 0 ? (
-                      <p className="muted small">Students appear here as they join.</p>
+                      <p className="muted small">Participants appear here as they join.</p>
                     ) : (
                       <ul className="threads">
                         {threads.map((t) => (
@@ -611,12 +614,31 @@ export default function Teacher() {
             )}
             {panel === 'join' && info && (
               <motion.div className="panel" initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 12 }}>
-                <p className="panel__label">Students join with</p>
+                <p className="panel__label">Share this code to invite people</p>
                 <QR text={joinUrl(info.code)} size={176} />
                 <Code code={info.code} />
+                <button
+                  className="btn btn--primary btn--wide"
+                  onClick={async () => {
+                    const url = joinUrl(info.code);
+                    const text = `Join my ${w.thing} “${info.subject}” on Meeto360\n${url}\nCode: ${info.code}`;
+                    try {
+                      if (navigator.share && matchMedia('(pointer: coarse)').matches) await navigator.share({ title: info.subject, text });
+                      else {
+                        await navigator.clipboard.writeText(text);
+                        setInviteCopied(true);
+                        setTimeout(() => setInviteCopied(false), 2200);
+                      }
+                    } catch {
+                      /* share closed */
+                    }
+                  }}
+                >
+                  {inviteCopied ? <><Icon.check /> Invite copied</> : 'Copy invite'}
+                </button>
                 <label className="toggle">
                   <input type="checkbox" checked={showJoin} onChange={(e) => room.socket?.emit('cls', { showJoin: e.target.checked })} />
-                  <span>Show on classroom board</span>
+                  <span>Show on the room screen</span>
                 </label>
               </motion.div>
             )}
@@ -627,12 +649,12 @@ export default function Teacher() {
                     <Suspense fallback={null}>
                       <Classroom3D view="classview" students={roomStudents(info?.size, room.people)} people={room.people} teacherName={null} showNames />
                     </Suspense>
-                    {room.people.length === 0 && <p className="classview__empty">Students appear at their desks as they join</p>}
+                    {room.people.length === 0 && <p className="classview__empty">Participants take a seat as they join</p>}
                   </div>
                 )}
                 {room.audio?.available && (
                   <div className="audioctl">
-                    <p className="panel__label">Class audio</p>
+                    <p className="panel__label">Audio</p>
                     <label className="switch">
                       <input
                         type="checkbox"
@@ -640,17 +662,17 @@ export default function Teacher() {
                         onChange={(e) => room.socket?.emit('audioOpen', e.target.checked)}
                       />
                       <span className="switch__track" />
-                      <span>Students may turn on their mic</span>
+                      <span>Participants may turn on their mic</span>
                     </label>
                     <p className="muted small">
                       {room.audio.open
                         ? 'Everyone can speak. Mute anyone below.'
                         : speakers.length
-                          ? `${speakers.length} ${speakers.length === 1 ? 'student' : 'students'} invited to speak.`
-                          : 'Only you can speak. Invite a student with the mic button.'}
+                          ? `${w.count(speakers.length)} invited to speak.`
+                          : 'Only you can speak. Invite someone with the mic button.'}
                     </p>
                     <button className="btn btn--ghost btn--sm" disabled={!speakers.length} onClick={() => room.socket?.emit('muteAll')}>
-                      <Icon.micOff /> Mute all students
+                      <Icon.micOff /> Mute everyone
                     </button>
                   </div>
                 )}
@@ -674,7 +696,7 @@ export default function Teacher() {
                     ))}
                   </ol>
                 )}
-                <p className="panel__label panel__label--gap">In class · {room.roster.filter((r) => r.online).length}</p>
+                <p className="panel__label panel__label--gap">Participants · {room.roster.filter((r) => r.online).length}</p>
                 <ul className="roster">
                   {room.roster
                     .filter((r) => r.online)
@@ -706,12 +728,12 @@ export default function Teacher() {
       {(notTeacher || room.status === 'error' || room.status === 'ended') && (
         <div className="veil">
           <div className="veil__card">
-            <h2>{room.status === 'ended' ? 'Class ended' : notTeacher ? 'This is not your class' : 'Could not open the class'}</h2>
+            <h2>{room.status === 'ended' ? `${w.Thing} ended` : notTeacher ? `You’re not the host of this ${w.thing}` : `Could not open the ${w.thing}`}</h2>
             <p>
               {room.status === 'ended'
                 ? 'Save the notes before you leave.'
                 : notTeacher
-                  ? 'Only the teacher who started this class can write on its board.'
+                  ? `Only the host who created this ${w.thing} can run it. Sign in with that account, or join with the code.`
                   : friendly(room.error, 'teacher')}
             </p>
             {room.status === 'ended' && (
@@ -778,7 +800,7 @@ export default function Teacher() {
         <AnimatePresence>
           {joined.map((n, i) => (
             <motion.div key={`${n}-${i}`} className="joined__item" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
-              <span className="joined__dot" /> <strong>{n}</strong> joined the class
+              <span className="joined__dot" /> <strong>{n}</strong> joined
             </motion.div>
           ))}
         </AnimatePresence>
@@ -787,8 +809,8 @@ export default function Teacher() {
       {confirmEnd && (
         <div className="veil" onClick={() => setConfirmEnd(false)}>
           <div className="veil__card" onClick={(e) => e.stopPropagation()}>
-            <h2>End this class?</h2>
-            <p>Students keep the notes written so far. The join code stops working.</p>
+            <h2>End this {w.thing} for everyone?</h2>
+            <p>Participants keep the notes written so far. The code stops working.</p>
             <button
               className="btn btn--primary btn--wide"
               onClick={() => {
@@ -796,10 +818,10 @@ export default function Teacher() {
                 setConfirmEnd(false);
               }}
             >
-              End class
+              End for everyone
             </button>
             <button className="btn btn--ghost btn--wide" onClick={() => setConfirmEnd(false)}>
-              Keep teaching
+              Cancel
             </button>
           </div>
         </div>

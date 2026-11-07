@@ -37,7 +37,7 @@ export default function Join() {
   useEffect(() => {
     if (code.length !== 6) return setFound(null);
     setErr('');
-    api.lookup(code).then(setFound).catch(() => setErr('No live class has this code. Check the board and try again.'));
+    api.lookup(code).then(setFound).catch(() => setErr('No live meeting or class has this code. Check it and try again.'));
   }, [code]);
 
   // QR scanning with the device camera.
@@ -75,7 +75,7 @@ export default function Join() {
     rememberCode(found.session.id, found.session.code);
     rememberName(cleanName.slice(0, 40));
     setEntering(true);
-    setTimeout(() => nav(`/class/${found.session.id}`, { state: { entering: true } }), 520);
+    setTimeout(() => nav(`/live/${found.session.id}`, { state: { entering: true } }), 520);
   };
 
   const n = found?.present ?? 0;
@@ -100,12 +100,12 @@ export default function Join() {
 
             {scanning ? (
               <div className="scan">
-                <h1 className="card__title">Scan the board</h1>
+                <h1 className="card__title">Scan the QR code</h1>
                 <div className="scan__view">
                   <video ref={video} className="scan__video" muted playsInline />
                   <div className="scan__frame" />
                 </div>
-                <p className="card__lede">Point your camera at the QR code on the classroom board.</p>
+                <p className="card__lede">Point your camera at the host’s QR code.</p>
                 <button className="btn btn--ghost btn--wide" onClick={() => setScanning(false)}>
                   Type the code instead
                 </button>
@@ -113,7 +113,7 @@ export default function Join() {
             ) : found ? (
               <div className="classcard">
                 <span className="pill pill--live-light">
-                  <span className="live-dot" /> Live now
+                  <span className="live-dot" /> Live {found.session.kind === 'meeting' ? 'meeting' : 'class'}
                 </span>
                 <h1 className="classcard__subject">{found.session.subject}</h1>
                 {found.session.topic && <p className="classcard__topic">{found.session.topic}</p>}
@@ -121,7 +121,7 @@ export default function Join() {
                   <span className="avatar avatar--sm">{found.session.teacherName.slice(0, 1).toUpperCase()}</span>
                   <span>
                     <strong>{found.session.teacherName}</strong>
-                    <small>{n === 0 ? 'Be the first to join' : `${n} ${n === 1 ? 'student is' : 'students are'} in class`}</small>
+                    <small>Host{n === 0 ? ' · be the first to join' : ` · ${n} ${n === 1 ? 'person has' : 'people have'} joined`}</small>
                   </span>
                 </div>
                 <form
@@ -145,19 +145,19 @@ export default function Join() {
                     />
                   </label>
                   <button className="btn btn--primary btn--wide" disabled={cleanName.length < 2}>
-                    Enter classroom
+                    Join now
                   </button>
                 </form>
                 <button className="link" onClick={() => setCode('')}>
-                  Not this class?
+                  Wrong code?
                 </button>
               </div>
             ) : (
               <div className="stack">
-                <h1 className="card__title">Join your class</h1>
-                <p className="card__lede">Enter the six-character code shown on the classroom board.</p>
+                <h1 className="card__title">Join a meeting or class</h1>
+                <p className="card__lede">Enter the six-character code the host shared with you.</p>
                 <label className="field">
-                  <span>Class code</span>
+                  <span>Code</span>
                   <input
                     className="input--code"
                     value={code}
@@ -166,7 +166,7 @@ export default function Join() {
                     autoFocus
                     autoComplete="off"
                     autoCapitalize="characters"
-                    aria-label="Class code"
+                    aria-label="Meeting or class code"
                   />
                 </label>
                 {err && <p className="form-error">{err}</p>}

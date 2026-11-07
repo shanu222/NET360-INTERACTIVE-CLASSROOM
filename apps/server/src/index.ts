@@ -95,13 +95,14 @@ app.get('/api/me', async (req, res) => {
 /** Start a class. */
 app.post('/api/sessions', async (req, res) => {
   const user = await userFromRequest(req);
-  if (!user) return res.status(401).json({ error: 'Sign in to start a class.' });
-  if (!mayTeach(user)) return res.status(403).json({ error: 'This account is not set up as a teacher.' });
-  const subject = String(req.body?.subject ?? 'Physics').slice(0, 60);
+  if (!user) return res.status(401).json({ error: 'Sign in to create a meeting or class.' });
+  if (!mayTeach(user)) return res.status(403).json({ error: 'This account is not allowed to host.' });
+  const subject = String(req.body?.subject ?? '').trim().slice(0, 80) || `${user.name}’s meeting`;
   const topic = String(req.body?.topic ?? '').slice(0, 120);
   const asked = Number(req.body?.size);
   const size = (CLASS_SIZES as readonly number[]).includes(asked) ? asked : CLASS_SIZES[0];
-  const s = store.create(user, subject, topic, size);
+  const kind = req.body?.kind === 'class' ? 'class' : 'meeting';
+  const s = store.create(user, subject, topic, size, kind);
   persist.sessionCreated(s);
   res.json({ session: s.info, boardKey: s.boardKey, padKey: padKeyFor(s.boardKey) });
 });

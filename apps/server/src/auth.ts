@@ -27,7 +27,7 @@ export async function verifyUser(idToken?: string, dev?: { uid?: string; name?: 
     if (!idToken || !app) return null;
     try {
       const t = await getAuth(app).verifyIdToken(idToken);
-      return { uid: t.uid, name: (t.name as string) || t.email?.split('@')[0] || 'Student', email: t.email };
+      return { uid: t.uid, name: (t.name as string) || t.email?.split('@')[0] || 'Guest', email: t.email };
     } catch {
       return null;
     }

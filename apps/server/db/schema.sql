@@ -25,6 +25,12 @@ CREATE TABLE IF NOT EXISTS session_settings (
   size          INTEGER NOT NULL DEFAULT 40
 );
 
+-- Whether the host created a meeting or a class (only changes the wording).
+CREATE TABLE IF NOT EXISTS session_kind (
+  session_id    TEXT PRIMARY KEY,
+  kind          TEXT NOT NULL DEFAULT 'class'
+);
+
 -- Latest board state per lecture. Lets a class survive a server restart and keeps the
 -- notes after class. The board itself (gzip JSON) is in R2 at boards/<session_id>.json.gz
 -- when R2 is configured (location = 'r2'); otherwise inline here as base64 (location = 'd1').

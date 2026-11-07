@@ -26,6 +26,10 @@ interface AuthCtx {
   /** Credentials for the socket handshake. */
   socketAuth: () => Promise<{ idToken?: string; dev?: { uid: string; name: string } }>;
   signInWithGoogle: () => Promise<void>;
+  /** Email accounts: sign in, create one (with a display name), or reset the password. */
+  signInWithEmail: (email: string, password: string) => Promise<void>;
+  signUpWithEmail: (name: string, email: string, password: string) => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;
   /** Error from a redirect sign-in that came back to the page. */
   authError: string | null;
   signInDev: (name: string) => void;
@@ -46,24 +50,39 @@ const fbConfig = {
 const DEV_UID = 'n360.dev.uid';
 const DEV_NAME = 'n360.dev.name';
 /** Plain-language messages for the Firebase errors people actually hit. */
-export function authMessage(e: unknown): string {
+export function authMessage(e: unknown, how: 'google' | 'email' = 'google'): string {
   const code = (e as { code?: string })?.code ?? '';
   const host = location.hostname;
   switch (code) {
     case 'auth/unauthorized-domain':
       return `This site (${host}) isn't allowed to sign in yet. In Firebase → Authentication → Settings → Authorized domains, add ${host}.`;
     case 'auth/operation-not-allowed':
-      return 'Google sign-in is turned off. In Firebase → Authentication → Sign-in method, enable Google.';
+      return how === 'email'
+        ? 'Email sign-in is turned off. In Firebase → Authentication → Sign-in method, enable Email/Password.'
+        : 'Google sign-in is turned off. In Firebase → Authentication → Sign-in method, enable Google.';
+    case 'auth/email-already-in-use':
+      return 'An account with this email already exists. Sign in instead.';
+    case 'auth/invalid-email':
+      return 'That email address doesn’t look right.';
+    case 'auth/missing-password':
+      return 'Enter your password.';
+    case 'auth/weak-password':
+      return 'Choose a password of at least 8 characters.';
+    case 'auth/invalid-credential':
+    case 'auth/invalid-login-credentials':
+    case 'auth/wrong-password':
+    case 'auth/user-not-found':
+      return 'Wrong email or password.';
     case 'auth/popup-closed-by-user':
     case 'auth/cancelled-popup-request':
       return 'Sign-in was closed before it finished. Try again.';
     case 'auth/network-request-failed':
-      return 'No connection to Google. Check the internet and try again.';
+      return 'No connection. Check the internet and try again.';
     case 'auth/invalid-api-key':
     case 'auth/api-key-not-valid.-please-pass-a-valid-api-key.':
       return 'The Firebase API key is wrong. Check VITE_FIREBASE_API_KEY on Vercel and redeploy.';
     case 'auth/user-disabled':
-      return 'This account has been turned off. Please contact your school.';
+      return 'This account has been turned off.';
     case 'auth/too-many-requests':
       return 'Too many attempts. Please wait a minute and try again.';
     default:
@@ -114,7 +133,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         mod.getRedirectResult(auth).catch((e) => setAuthError(authMessage(e)));
         unsub = mod.onAuthStateChanged(auth, (u) => {
           setFbUser(u);
-          setUser(u ? { uid: u.uid, name: u.displayName || u.email?.split('@')[0] || 'Student', email: u.email ?? undefined } : null);
+          setUser(u ? { uid: u.uid, name: u.displayName || u.email?.split('@')[0] || 'Host', email: u.email ?? undefined } : null);
           setReady(true);
         });
       } else {
@@ -145,6 +164,48 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
   }, [fb]);
 
+  const signInWithEmail = useCallback(
+    async (email: string, password: string) => {
+      if (!fb) throw new Error('Sign-in is still loading — try again in a moment.');
+      try {
+        await fb.mod.signInWithEmailAndPassword(fb.auth, email.trim(), password);
+      } catch (e) {
+        throw new Error(authMessage(e, 'email'));
+      }
+    },
+    [fb],
+  );
+
+  const signUpWithEmail = useCallback(
+    async (name: string, email: string, password: string) => {
+      if (!fb) throw new Error('Sign-in is still loading — try again in a moment.');
+      if (password.length < 8) throw new Error('Choose a password of at least 8 characters.');
+      try {
+        const cred = await fb.mod.createUserWithEmailAndPassword(fb.auth, email.trim(), password);
+        await fb.mod.updateProfile(cred.user, { displayName: name.trim() });
+        // A fresh token carries the name, so the server greets the host by it.
+        await cred.user.getIdToken(true);
+        setUser({ uid: cred.user.uid, name: name.trim(), email: cred.user.email ?? undefined });
+        fb.mod.sendEmailVerification(cred.user).catch(() => undefined);
+      } catch (e) {
+        throw new Error(authMessage(e, 'email'));
+      }
+    },
+    [fb],
+  );
+
+  const resetPassword = useCallback(
+    async (email: string) => {
+      if (!fb) throw new Error('Sign-in is still loading — try again in a moment.');
+      try {
+        await fb.mod.sendPasswordResetEmail(fb.auth, email.trim());
+      } catch (e) {
+        throw new Error(authMessage(e, 'email'));
+      }
+    },
+    [fb],
+  );
+
   const signInDev = useCallback((name: string) => {
     let uid = sessionStorage.getItem(DEV_UID);
     if (!uid) {
@@ -174,8 +235,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [socketAuth]);
 
   const value = useMemo(
-    () => ({ ready, mode, media, user, headers, socketAuth, signInWithGoogle, authError, signInDev, signOut }),
-    [ready, mode, media, user, headers, socketAuth, signInWithGoogle, authError, signInDev, signOut],
+    () => ({ ready, mode, media, user, headers, socketAuth, signInWithGoogle, signInWithEmail, signUpWithEmail, resetPassword, authError, signInDev, signOut }),
+    [ready, mode, media, user, headers, socketAuth, signInWithGoogle, signInWithEmail, signUpWithEmail, resetPassword, authError, signInDev, signOut],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

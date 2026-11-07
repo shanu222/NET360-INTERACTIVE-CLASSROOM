@@ -51,14 +51,14 @@ export default function BoardDisplay() {
           >
             <QR text={joinUrl(info.code)} size={big ? 260 : 132} />
             <div className="joincard__text">
-              {big && <p className="joincard__eyebrow">Join the class</p>}
+              {big && <p className="joincard__eyebrow">Join the {info.kind === 'meeting' ? 'meeting' : 'class'}</p>}
               <Code code={info.code} />
               <p className="joincard__hint">
                 {big ? 'Scan with your phone camera, or open Meeto360 and enter the code.' : 'Scan to join'}
               </p>
               {big && (
                 <p className="joincard__count">
-                  {present === 0 ? 'Waiting for the first student…' : `${present} ${present === 1 ? 'student' : 'students'} in class`}
+                  {present === 0 ? 'Waiting for the first participant…' : `${present} ${present === 1 ? 'participant' : 'participants'} joined`}
                 </p>
               )}
             </div>

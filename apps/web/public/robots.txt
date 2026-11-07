@@ -4,6 +4,8 @@ Allow: /$
 Allow: /join
 Disallow: /class/
 Disallow: /teach/
+Disallow: /live/
+Disallow: /host/
 Disallow: /board/
 Disallow: /pad/
 Disallow: /api/

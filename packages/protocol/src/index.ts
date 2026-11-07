@@ -315,9 +315,13 @@ export interface SessionInfo {
   topic: string;
   teacherName: string;
   startedAt: number;
-  /** How many students the teacher expects (sets the size of the classroom). */
+  /** How many people the host expects (sets the size of the room). */
   size?: number;
+  /** A meeting or a class (only changes the wording people see). */
+  kind?: SessionKind;
 }
+
+export type SessionKind = 'meeting' | 'class';
 
 /** Class sizes a teacher can choose when starting a class. */
 export const CLASS_SIZES = [40, 60, 150, 300, 500] as const;

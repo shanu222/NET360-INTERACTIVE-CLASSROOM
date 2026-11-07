@@ -13,11 +13,10 @@ export const config = {
     serviceAccountJson: env.FIREBASE_SERVICE_ACCOUNT ?? '',
   },
   /**
-   * Comma-separated Google accounts allowed to start classes and teach. With Firebase
-   * sign-in on and nothing set, only the Meeto360 admin account may teach. (Local dev
-   * without Firebase lets anyone teach.)
+   * Optional: comma-separated accounts allowed to host. Empty (the default) lets anyone
+   * who signs in — with Google or an email account — create meetings and classes.
    */
-  teacherEmails: (env.TEACHER_EMAILS || (env.FIREBASE_PROJECT_ID ? 'shahnawaz9974balouch@gmail.com' : ''))
+  teacherEmails: (env.HOST_EMAILS || env.TEACHER_EMAILS || '')
     .split(',')
     .map((s) => s.trim().toLowerCase())
     .filter(Boolean),

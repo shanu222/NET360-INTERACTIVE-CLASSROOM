@@ -9,7 +9,7 @@ async function call<T>(path: string, init: RequestInit & { headers?: Record<stri
       headers: { 'Content-Type': 'application/json', ...(init.headers ?? {}) },
     });
   } catch {
-    throw new Error('Cannot reach the classroom server. Check your connection and try again.');
+    throw new Error('Cannot reach Meeto360. Check your connection and try again.');
   }
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(body.error ?? `Request failed (${res.status})`);
@@ -17,11 +17,11 @@ async function call<T>(path: string, init: RequestInit & { headers?: Record<stri
 }
 
 export const api = {
-  startClass: (headers: Record<string, string>, subject: string, topic: string, size: number) =>
+  startClass: (headers: Record<string, string>, subject: string, topic: string, size: number, kind: 'meeting' | 'class' = 'class') =>
     call<{ session: SessionInfo; boardKey: string; padKey: string }>('/api/sessions', {
       method: 'POST',
       headers,
-      body: JSON.stringify({ subject, topic, size }),
+      body: JSON.stringify({ subject, topic, size, kind }),
     }),
   owner: (headers: Record<string, string>, id: string) =>
     call<{ session: SessionInfo; boardKey: string; padKey: string }>(`/api/sessions/${id}/owner`, { headers }),

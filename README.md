@@ -50,7 +50,7 @@ Without Firebase settings the app runs in **dev mode**: you sign in with just a 
 1. Firebase console → your project → **Authentication** → enable **Google**.
 2. Add your domain under **Authorized domains**.
 3. Copy `.env.example` to `.env` and fill in `FIREBASE_PROJECT_ID` and the four `VITE_FIREBASE_*` values from **Project settings → Your apps**.
-4. Optional: `TEACHER_EMAILS=a@x.com,b@y.com` limits who can start classes.
+4. Optional: `HOST_EMAILS=a@x.com,b@y.com` limits who can host (by default anyone who signs in can).
 5. `npm run build && npm start`.
 
 ## Video (Phase 4) — LiveKit Cloud or self-hosted

@@ -22,6 +22,9 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/join" element={<Join />} />
+          <Route path="/live/:sessionId" element={<Student />} />
+          <Route path="/host/:sessionId" element={<Teacher />} />
+          {/* Links from before meetings: still work. */}
           <Route path="/class/:sessionId" element={<Student />} />
           <Route path="/teach/:sessionId" element={<Teacher />} />
           <Route path="/board/:sessionId" element={<BoardDisplay />} />

@@ -17,6 +17,7 @@ import { useClassAudio } from '../lib/audio.ts';
 import { AddSlides, ScreenStage, SlideNav, useSlideUpload } from '../components/Present.tsx';
 import { canSpeak } from '@net360/protocol';
 import type { ChatMessage } from '@net360/protocol';
+import { words } from '../lib/words.ts';
 
 /**
  * The student's classroom: the 3D room with the live board, classmates at
@@ -52,7 +53,7 @@ export default function Student() {
   useEffect(() => {
     if (!room.socket) return;
     const s = room.socket;
-    const muted = () => flash('Your teacher turned your microphone off');
+    const muted = () => flash('The host turned your microphone off');
     s.on('mutedByTeacher', muted);
     return () => {
       s.off('mutedByTeacher', muted);
@@ -71,7 +72,7 @@ export default function Student() {
   useEffect(() => {
     if (presenting && !wasPresenting.current) {
       setAsked(false);
-      flash('Your teacher lets you present');
+      flash('The host lets you present');
     }
     if (!presenting && wasPresenting.current) {
       if (sound.sharing) void sound.shareScreen(false);
@@ -85,7 +86,7 @@ export default function Student() {
     const s = room.socket;
     const no = () => {
       setAsked(false);
-      flash('Your teacher said not now');
+      flash('The host said not now');
     };
     s.on('presentDeclined', no);
     return () => {
@@ -100,7 +101,7 @@ export default function Student() {
   const askPresent = (on: boolean) => {
     room.socket?.emit('presentAsk', on);
     setAsked(on);
-    if (on) flash('Asked your teacher — waiting…');
+    if (on) flash('Asked the host — waiting…');
   };
 
   const teacherTalking =
@@ -142,6 +143,7 @@ export default function Student() {
   if (!code || !guest.name) return <Navigate to="/join" replace />;
 
   const info = room.welcome?.session;
+  const w = words(info?.kind);
   const flash = (m: string) => {
     setToast(m);
     setTimeout(() => setToast(''), 2600);
@@ -194,28 +196,28 @@ export default function Student() {
               {info.topic && <span> · {info.topic}</span>}
             </>
           ) : (
-            'Entering classroom…'
+            'Joining…'
           )}
         </span>
         <StatusPill status={room.status} />
         {sound.teacherLive && (
-          <span className={`pill pill--onair ${teacherTalking && sound.heard ? 'is-talking' : ''} ${!sound.heard ? 'is-quiet' : ''}`} title={sound.heard ? 'Your teacher’s microphone is on' : 'Class sound is off on this device'}>
-            {sound.heard ? <Icon.mic /> : <Icon.speakerOff />} {!sound.heard ? 'Sound off' : teacherTalking ? 'Teacher speaking' : 'Teacher on air'}
+          <span className={`pill pill--onair ${teacherTalking && sound.heard ? 'is-talking' : ''} ${!sound.heard ? 'is-quiet' : ''}`} title={sound.heard ? 'The host’s microphone is on' : 'Sound is off on this device'}>
+            {sound.heard ? <Icon.mic /> : <Icon.speakerOff />} {!sound.heard ? 'Sound off' : teacherTalking ? 'Host speaking' : 'Host on air'}
           </span>
         )}
         {room.people.length > 0 && (
           <span className="mates">
-            <button className="topline__btn topline__btn--count" onClick={() => setMates((v) => !v)} aria-label="Who is in class" title="Who is in class">
+            <button className="topline__btn topline__btn--count" onClick={() => setMates((v) => !v)} aria-label="Participants" title="Participants">
               <Icon.users /> {room.people.length}
             </button>
             <AnimatePresence>
               {mates && (
                 <motion.div className="mates__list" initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}>
-                  <p className="panel__label">In class · {room.people.length}</p>
+                  <p className="panel__label">Participants · {room.people.length + 1}</p>
                   <ul>
                     {info && (
                       <li className="mates__teacher">
-                        {info.teacherName} <small>Teacher</small>
+                        {info.teacherName} <small>Host</small>
                       </li>
                     )}
                     {[...room.people]
@@ -259,7 +261,7 @@ export default function Student() {
                       toggle3d();
                     }}
                   >
-                    {in3d ? <Icon.board /> : <Icon.cube />} {in3d ? 'Board only' : 'Classroom view'}
+                    {in3d ? <Icon.board /> : <Icon.cube />} {in3d ? 'Board only' : '3D room view'}
                   </button>
                 )}
               </motion.div>
@@ -270,11 +272,11 @@ export default function Student() {
           <button
             className={`fab fab--quiet ${!sound.heard ? 'is-off' : ''} ${idle && !menu && sound.heard ? 'is-idle' : ''}`}
             aria-pressed={!sound.heard}
-            aria-label={sound.heard ? 'Silence the class on this device' : 'Hear the class again'}
-            title={sound.heard ? 'Silence the class on this device' : 'Hear the class again'}
+            aria-label={sound.heard ? 'Mute sound on this device' : 'Turn sound back on'}
+            title={sound.heard ? 'Mute sound on this device' : 'Turn sound back on'}
             onClick={() => {
               sound.setHeard(!sound.heard);
-              flash(sound.heard ? 'Class sound off on this device' : 'Class sound on');
+              flash(sound.heard ? 'Sound off on this device' : 'Sound on');
             }}
           >
             {sound.heard ? <Icon.speaker /> : <Icon.speakerOff />}
@@ -299,7 +301,7 @@ export default function Student() {
           <button
             className={`fab fab--quiet ${asked ? 'is-on' : ''} ${idle && !menu && !asked ? 'is-idle' : ''}`}
             aria-label={asked ? 'Cancel your request to present' : 'Ask to present'}
-            title={asked ? 'Waiting for your teacher — click to cancel' : 'Ask to present (share your screen or slides)'}
+            title={asked ? 'Waiting for the host — click to cancel' : 'Ask to present (share your screen or slides)'}
             onClick={() => askPresent(!asked)}
           >
             <Icon.screen />
@@ -307,8 +309,8 @@ export default function Student() {
         )}
         <button
           className={`fab fab--quiet fab--chat ${chatOpen ? 'is-on' : ''} ${idle && !menu && !chatOpen && !unread.total ? 'is-idle' : ''}`}
-          aria-label="Message your teacher"
-          title="Message your teacher"
+          aria-label="Message the host"
+          title="Message the host"
           onClick={() => setChatOpen((o) => !o)}
         >
           <Icon.chat />
@@ -321,7 +323,7 @@ export default function Student() {
           aria-label={room.hand ? 'Lower hand' : 'Raise hand'}
           onClick={() => {
             room.socket?.emit('hand', !room.hand);
-            if (!room.hand) flash('Your teacher can see your hand');
+            if (!room.hand) flash('The host can see your hand');
           }}
         >
           <Icon.hand />
@@ -332,13 +334,13 @@ export default function Student() {
       <AnimatePresence>
         {sound.status === 'on' && sound.needsTap && sound.heard && (
           <motion.button className="soundtap" initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} onClick={sound.startSound}>
-            <Icon.speaker /> Tap to hear your teacher
+            <Icon.speaker /> Tap to turn on sound
           </motion.button>
         )}
         {invited && mayTalk && !sound.micOn && (
           <motion.div className="invite" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
             <Icon.mic />
-            <span>Your teacher invited you to speak</span>
+            <span>The host invited you to speak</span>
             <button
               className="btn btn--primary btn--sm"
               disabled={sound.micBusy}
@@ -361,8 +363,8 @@ export default function Student() {
           <motion.div className="drawer" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 16 }}>
             <div className="drawer__head">
               <span>
-                <strong>{info?.teacherName ?? 'Your teacher'}</strong>
-                <small>Only your teacher sees these messages</small>
+                <strong>{info?.teacherName ?? 'Host'}</strong>
+                <small>Private — only the host sees these messages</small>
               </span>
               <button aria-label="Close" onClick={() => setChatOpen(false)}>
                 <Icon.close />
@@ -371,12 +373,12 @@ export default function Student() {
             <ChatThread
               messages={room.chats}
               me={me}
-              placeholder="Write to your teacher…"
+              placeholder="Write to the host…"
               empty="Ask a question or say hello."
               autoFocus
               seenAt={teacherUid && me ? room.seen[`${teacherUid}|${me}`] ?? 0 : 0}
               typing={Object.entries(room.typing).some(([, until]) => until > Date.now())}
-              typingLabel={info?.teacherName ?? 'Your teacher'}
+              typingLabel={info?.teacherName ?? 'The host'}
               onSend={(text) => room.sendChat(text)}
               onRetry={room.retryChat}
               onTyping={() => room.sendTyping()}
@@ -433,8 +435,8 @@ export default function Student() {
       {(room.status === 'ended' || room.status === 'error') && (
         <div className="veil">
           <div className="veil__card">
-            <h2>{room.status === 'ended' ? 'Class has ended' : "Couldn't join the class"}</h2>
-            <p>{room.status === 'ended' ? 'Your notes from today are ready to keep.' : friendly(room.error)}</p>
+            <h2>{room.status === 'ended' ? `The host ended the ${w.thing}` : "Couldn't join"}</h2>
+            <p>{room.status === 'ended' ? 'The notes from the board are ready to keep.' : friendly(room.error)}</p>
             {room.status === 'ended' && (
               <button className="btn btn--primary btn--wide" onClick={save}>
                 Save notes as PDF
@@ -512,14 +514,14 @@ export default function Student() {
 /** Turn server messages into wording students understand. */
 export function friendly(msg: string | null, who: 'student' | 'teacher' = 'student'): string {
   if (!msg) return 'Please try again in a moment.';
-  if (/class is full/i.test(msg)) return 'This class is full. Ask your teacher to start a bigger class.';
-  if (/wrong class code|class code/i.test(msg)) return 'That code doesn’t match this class. Use the code your teacher shared.';
-  if (/your name|join again/i.test(msg)) return 'Please enter your name and the class code again.';
+  if (/class is full/i.test(msg)) return 'This meeting is full (500 people). Ask the host to start another one.';
+  if (/wrong class code|class code/i.test(msg)) return 'That code doesn’t match. Use the code the host shared with you.';
+  if (/your name|join again/i.test(msg)) return 'Please enter your name and the code again.';
   // Students never sign in; this only appears while the classroom server is updating.
-  if (/sign in/i.test(msg)) return who === 'teacher' ? 'Please sign in again to open your class.' : 'Your classroom is getting ready. Please try again in a moment.';
-  if (/ended|not exist/i.test(msg)) return 'This class has ended or the code is no longer active.';
-  if (/board link/i.test(msg)) return 'This board link has expired. Open it again from the teacher’s screen.';
-  return 'We lost the connection to your class. Please try again.';
+  if (/sign in/i.test(msg)) return who === 'teacher' ? 'Please sign in again to open your meeting.' : 'The meeting is getting ready. Please try again in a moment.';
+  if (/ended|not exist/i.test(msg)) return 'This meeting has ended or the code is no longer active.';
+  if (/board link/i.test(msg)) return 'This screen link has expired. Open it again from the host’s console.';
+  return 'We lost the connection. Please try again.';
 }
 
 export function StatusPill({ status }: { status: string }) {

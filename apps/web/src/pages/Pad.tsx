@@ -85,7 +85,7 @@ export default function Pad() {
       {(room.status === 'error' || room.status === 'ended') && (
         <div className="veil">
           <div className="veil__card">
-            <h2>{room.status === 'ended' ? 'Class ended' : 'Writing pad not connected'}</h2>
+            <h2>{room.status === 'ended' ? 'Ended' : 'Writing pad not connected'}</h2>
             <p>{room.status === 'ended' ? 'You can close this page.' : friendly(room.error)}</p>
           </div>
         </div>

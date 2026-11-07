@@ -36,6 +36,7 @@ export const persist = {
       [i.id, i.code, i.subject, i.topic, s.teacherUid, i.teacherName, s.boardKey, i.startedAt, Date.now()],
     );
     write(`INSERT OR REPLACE INTO session_settings (session_id, size) VALUES (?, ?)`, [i.id, i.size ?? 40]);
+    write(`INSERT OR REPLACE INTO session_kind (session_id, kind) VALUES (?, ?)`, [i.id, i.kind ?? 'class']);
   },
 
   joined(s: Session, uid: string, name: string, role: 'teacher' | 'student') {
@@ -165,6 +166,7 @@ interface Row {
   board_key: string;
   started_at: number;
   size: number | null;
+  kind: string | null;
   location: 'r2' | 'd1' | null;
   data: string | null;
 }
@@ -173,8 +175,8 @@ interface Row {
 export async function restoreLiveSessions(): Promise<number> {
   if (!dbEnabled) return 0;
   const rows = await query<Row>(
-    `SELECT s.id, s.code, s.subject, s.topic, s.teacher_uid, s.teacher_name, s.board_key, s.started_at, c.size, b.location, b.data
-     FROM class_sessions s LEFT JOIN board_snapshots b ON b.session_id = s.id LEFT JOIN session_settings c ON c.session_id = s.id
+    `SELECT s.id, s.code, s.subject, s.topic, s.teacher_uid, s.teacher_name, s.board_key, s.started_at, c.size, k.kind, b.location, b.data
+     FROM class_sessions s LEFT JOIN board_snapshots b ON b.session_id = s.id LEFT JOIN session_settings c ON c.session_id = s.id LEFT JOIN session_kind k ON k.session_id = s.id
      WHERE s.status = 'live' AND s.last_active > ?`,
     [Date.now() - config.sessionIdleMs],
   );
@@ -192,7 +194,7 @@ export async function restoreLiveSessions(): Promise<number> {
     }
     const restored = store.adopt(
       {
-        info: { id: r.id, code: r.code, subject: r.subject, topic: r.topic, teacherName: r.teacher_name, startedAt: r.started_at, size: r.size ?? 40 },
+        info: { id: r.id, code: r.code, subject: r.subject, topic: r.topic, teacherName: r.teacher_name, startedAt: r.started_at, size: r.size ?? 40, kind: r.kind === 'meeting' ? 'meeting' : 'class' },
         teacherUid: r.teacher_uid,
         boardKey: r.board_key,
       },

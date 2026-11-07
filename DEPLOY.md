@@ -48,9 +48,12 @@ You don't need to create tables — the server creates them on first start from 
    R2_SECRET_ACCESS_KEY=
    SNAPSHOT_EVERY_SECONDS=3
    FIREBASE_PROJECT_ID=
-   TEACHER_EMAILS=shahnawaz9974balouch@gmail.com
    ALLOWED_ORIGINS=
    ```
+
+   Anyone who signs in (Google or email) can host. To limit hosting to certain accounts,
+   add `HOST_EMAILS=a@x.com,b@y.com`. (The older name `TEACHER_EMAILS` does the same —
+   delete it if you want everyone to be able to host.)
 
    Railway sets `PORT` itself — don't add it. `ALLOWED_ORIGINS` is filled in after step 3.
 3. **Settings** — Railway's config-as-code is deprecated and new services ignore `railway.json`, so set these by hand:
@@ -92,7 +95,7 @@ If the build log shows Railpack instead of Docker, set **Deploy → Custom Start
 
 ## 4. Firebase (sign-in)
 
-1. Firebase console → **Authentication → Sign-in method** → enable **Google**.
+1. Firebase console → **Authentication → Sign-in method** → enable **Google** and **Email/Password**.
 2. **Authentication → Settings → Authorized domains** → add your Vercel domain (and custom domain).
 
 ## 5. Check it

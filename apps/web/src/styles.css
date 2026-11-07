@@ -1655,3 +1655,41 @@ svg { display: block; }
   .console--3d { justify-content: flex-end; overflow: visible; }
 }
 .btn--end { gap: 0; }
+
+/* Front door: join or create */
+.tabs--icons button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+.tabs--icons button svg { width: 18px; height: 18px; }
+.kindpick { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.kindpick button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(42, 33, 25, 0.16);
+  border-radius: 12px;
+  background: #fffaf2;
+  text-align: left;
+  color: var(--ink-2);
+}
+.kindpick button svg { flex: none; width: 22px; height: 22px; color: var(--ink-soft); }
+.kindpick button span { display: grid; gap: 1px; min-width: 0; }
+.kindpick button strong { font-size: 14.5px; }
+.kindpick button small { font-size: 12px; color: var(--ink-soft); line-height: 1.3; }
+.kindpick button.is-on { border-color: var(--amber-deep); background: rgba(242, 180, 76, 0.18); box-shadow: 0 0 0 3px rgba(242, 180, 76, 0.18); }
+.kindpick button.is-on svg { color: var(--amber-deep); }
+.who__text { min-width: 0; }
+.who__text span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Sign-in for hosts */
+.btn svg { flex: none; }
+.signin__email { gap: 12px; }
+.signin__head { display: flex; align-items: center; gap: 8px; font-size: 15px; }
+.signin__back { display: grid; place-items: center; width: 32px; height: 32px; border: 0; border-radius: 50%; background: var(--ivory-2); }
+.signin__back svg { width: 16px; height: 16px; }
+.field .signin__pw { position: relative; display: block; font-size: inherit; font-weight: inherit; letter-spacing: 0; text-transform: none; color: inherit; }
+.signin__pw input { padding-right: 64px; }
+.signin__show { position: absolute; right: 8px; top: 50%; translate: 0 -50%; height: 32px; padding: 0 10px; border: 0; border-radius: 8px; background: none; font-size: 13px; font-weight: 600; color: var(--ink-soft); }
+.signin__links { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.signin__ok { margin: 0; padding: 10px 12px; border-radius: 10px; background: rgba(63, 157, 106, 0.12); color: #2c6e4a; font-size: 14px; }
+@media (max-width: 380px) { .kindpick button small { display: none; } }
