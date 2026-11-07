@@ -181,3 +181,16 @@ To try the split setup locally: run the server with `ALLOWED_ORIGINS=http://loca
 7. **Google Cloud** → APIs & Services → Credentials → the Web OAuth client: add
    `https://meeto360.com` to Authorized JavaScript origins and
    `https://meeto360.com/__/auth/handler` to Authorized redirect URIs.
+
+## Privacy: what Meeto360 keeps
+
+Shared content is temporary and belongs to the meeting:
+
+| What | Where | How long |
+|---|---|---|
+| Slides, PDFs, pictures | Server memory only (never disk, D1 or R2) | Erased 2 minutes after the host ends the meeting |
+| Shared screens, voice | Streamed live through LiveKit; never recorded | Not stored |
+| Whiteboard, private messages | D1 / R2, only so a live meeting survives a server update | Erased when the meeting ends (or after 12 hours idle) |
+| Attendance, raised hands | Not recorded | — |
+
+Each screen fetches any remaining slides when the meeting ends, so participants can still save their notes as a PDF on their own device. The server clears leftovers from earlier versions on start and every hour (old slide images and boards in R2, attendance rows in D1).

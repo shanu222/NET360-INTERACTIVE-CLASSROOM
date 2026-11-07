@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { io, type ManagerOptions, type Socket, type SocketOptions } from 'socket.io-client';
 import msgpackParser from 'socket.io-msgpack-parser';
-import { BoardSession } from '@net360/board-engine';
+import { BoardSession, loadSlides } from '@net360/board-engine';
 import type { AudioState, ChatMessage, ChatSeen, PresentState, ClassState, ClientToServer, PersonPublic, RosterEntry, ServerToClient, Welcome } from '@net360/protocol';
 import { useAuth } from './auth.tsx';
 import { API_URL } from './env.ts';
@@ -163,7 +163,12 @@ export function useClassroom(
     s.on('audio', setAudio);
     s.on('present', setPresent);
     s.on('typing', (from) => setTyping((t) => ({ ...t, [from]: Date.now() + 3500 })));
-    s.on('ended', () => setStatus('ended'));
+    s.on('ended', () => {
+      setStatus('ended');
+      // The server erases the meeting's slides shortly; keep the ones not yet seen,
+      // so notes can still be saved with every slide.
+      void loadSlides(board.state);
+    });
     s.on('fail', (m) => {
       setError(m);
       setStatus('error');

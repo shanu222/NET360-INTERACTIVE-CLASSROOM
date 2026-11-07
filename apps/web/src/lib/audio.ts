@@ -143,10 +143,16 @@ export function useClassAudio(
         setSharing(false);
       };
       room
-        .on(RoomEvent.TrackSubscribed, (track) => {
+        .on(RoomEvent.TrackSubscribed, (track, pub, from) => {
           if (track.kind === Track.Kind.Video) return refreshScreen();
           // The classroom screen shows shared screens only; sound comes from the room itself.
           if (track.kind !== Track.Kind.Audio || watchOnly) return;
+          // Never play anyone their own voice — e.g. the host who also opened the meeting as
+          // a participant on another device or tab. (That would echo and howl.)
+          if (samePerson(from.identity, room!.localParticipant.identity)) {
+            pub.setSubscribed(false);
+            return;
+          }
           const el = track.attach();
           el.muted = !heardRef.current;
           el.style.display = 'none';
@@ -239,7 +245,7 @@ export function useClassAudio(
     try {
       await room.localParticipant.setScreenShareEnabled(
         on,
-        { audio: false, contentHint: 'detail', resolution: { width: 1920, height: 1080, frameRate: 15 } },
+        { audio: false, selfBrowserSurface: 'exclude', contentHint: 'detail', resolution: { width: 1920, height: 1080, frameRate: 15 } },
         { videoCodec: 'vp8' },
       );
       setSharing(room.localParticipant.isScreenShareEnabled);
@@ -324,4 +330,10 @@ async function cleanMic(room: import('livekit-client').Room, lk: typeof import('
     // The browser's own noise reduction still applies.
     console.warn('[audio] noise filter unavailable:', (e as Error)?.message ?? e);
   }
+}
+
+/** One person on two screens: the host's account also joins as "<uid>#student". */
+export function samePerson(a: string, b: string) {
+  const base = (id: string) => id.replace(/#student$/, '');
+  return Boolean(a && b) && base(a) === base(b);
 }

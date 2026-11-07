@@ -25,10 +25,10 @@ import { putObject } from './storage.ts';
 import { mayTeach, userFromRequest, verifyUser } from './auth.ts';
 import { store, type Session } from './store.ts';
 import { mediaParticipants, mediaToken, setAllow } from './media.ts';
-import { loadSlide, saveSlide } from './slides.ts';
+import { dropSlides, loadSlide, saveSlide } from './slides.ts';
 import { BOARD_MODES, CLASS_SIZES, MAX_CLASS, MAX_SLIDES, SLIDE_RE, validRect } from '@net360/protocol';
 import { migrate } from './db.ts';
-import { flushAll, persist, restoreLiveSessions, startSnapshots } from './persist.ts';
+import { erase, flushAll, persist, purgeOld, restoreLiveSessions, startSnapshots } from './persist.ts';
 import { padKeyFor } from './passes.ts';
 import { nanoid } from 'nanoid';
 
@@ -67,7 +67,8 @@ app.get('/api/slides/:sid/:file', async (req, res) => {
     const data = await loadSlide(img);
     if (!data) return res.status(404).end();
     res.setHeader('Content-Type', 'image/jpeg');
-    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    // Only the viewer's own browser may keep a copy (no shared caches), for the day.
+    res.setHeader('Cache-Control', 'private, max-age=86400, immutable');
     // Boards draw slides into canvases (and the 3D room uploads them to the GPU).
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
@@ -201,6 +202,14 @@ function validEvent(ev: any): ev is BoardEventBody {
       return false;
   }
 }
+
+/** After the host ends a meeting, its content is erased this long later (screens finish saving notes). */
+const ERASE_AFTER_END_MS = Number(process.env.ERASE_AFTER_END_SECONDS ?? 120) * 1000;
+// A meeting that is over (ended, or idle too long) leaves nothing behind.
+store.onRemove = (id) => {
+  dropSlides(id);
+  void erase(id);
+};
 
 const room = (s: Session) => `s:${s.info.id}`;
 const teacherRoom = (s: Session) => `t:${s.info.id}`;
@@ -379,7 +388,6 @@ io.on('connection', (socket: Socket<ClientToServer, ServerToClient>) => {
       s.roster.set(uid, { uid, name, online: true, hand: false, joinedAt: Date.now(), seat: seatFor(s, uid), sockets: 1 });
     }
   }
-  if (role !== 'board') persist.joined(s, uid, name, role);
 
   socket.emit('welcome', { role, me: { uid, name, clientId }, session: s.info, cls: s.cls, canWrite, epoch });
   if (role === 'teacher') socket.emit('roster', rosterList(s));
@@ -519,8 +527,6 @@ io.on('connection', (socket: Socket<ClientToServer, ServerToClient>) => {
     if (role !== 'student') return;
     const r = s.roster.get(uid);
     if (!r || r.hand === Boolean(up)) return;
-    if (up) persist.handRaised(s, uid);
-    else persist.handLowered(s, uid, 'student');
     r.hand = Boolean(up);
     r.handAt = r.hand ? Date.now() : undefined;
     io.to(userRoom(s, uid)).emit('hand', r.hand);
@@ -531,7 +537,6 @@ io.on('connection', (socket: Socket<ClientToServer, ServerToClient>) => {
     if (role !== 'teacher') return;
     const r = s.roster.get(String(who));
     if (!r) return;
-    if (r.hand) persist.handLowered(s, r.uid, 'teacher');
     r.hand = false;
     r.handAt = undefined;
     io.to(userRoom(s, r.uid)).emit('hand', false);
@@ -611,11 +616,12 @@ io.on('connection', (socket: Socket<ClientToServer, ServerToClient>) => {
     s.ended = true;
     s.cls.live = false;
     io.to(room(s)).emit('ended');
-    void persist.ended(s);
+    // Screens fetch any slides they haven't shown yet (for saving notes), then
+    // everything of this meeting is erased from the server.
+    setTimeout(() => store.remove(s.info.id), ERASE_AFTER_END_MS).unref();
   });
 
   socket.on('disconnect', () => {
-    if (role !== 'board') persist.left(s, uid);
     if (role !== 'student') return;
     const r = s.roster.get(uid);
     if (!r) return;
@@ -633,8 +639,10 @@ async function start() {
   if (dbEnabled) {
     try {
       await migrate();
+      const gone = await purgeOld();
+      if (gone) console.log(`Erased ${gone} finished ${gone === 1 ? 'meeting' : 'meetings'}`);
       const n = await restoreLiveSessions();
-      if (n) console.log(`Restored ${n} live ${n === 1 ? 'class' : 'classes'} from Cloudflare D1`);
+      if (n) console.log(`Restored ${n} live ${n === 1 ? 'meeting' : 'meetings'} from Cloudflare D1`);
     } catch (e) {
       // Keep teaching even if the database is unreachable; snapshots retry on their own.
       console.error('[db] startup failed — running without restore:', (e as Error).message);

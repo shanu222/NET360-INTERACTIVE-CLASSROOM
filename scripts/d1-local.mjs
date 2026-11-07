@@ -32,6 +32,20 @@ createServer((req, res) => {
         res.writeHead(200);
         return res.end();
       }
+      if (req.method === 'DELETE') {
+        objects.delete(req.url);
+        res.writeHead(204);
+        return res.end();
+      }
+      // ListObjectsV2: GET /<bucket>?list-type=2&prefix=…
+      const u = new URL(req.url ?? '/', 'http://x');
+      if (req.method === 'GET' && u.searchParams.get('list-type') === '2') {
+        const base = `${u.pathname}/`;
+        const prefix = u.searchParams.get('prefix') ?? '';
+        const keys = [...objects.keys()].filter((k) => k.startsWith(base + prefix)).map((k) => decodeURIComponent(k.slice(base.length)));
+        res.writeHead(200, { 'Content-Type': 'application/xml' });
+        return res.end(`<ListBucketResult><IsTruncated>false</IsTruncated>${keys.map((k) => `<Contents><Key>${k}</Key></Contents>`).join('')}</ListBucketResult>`);
+      }
       if (req.method === 'GET') {
         const o = objects.get(req.url);
         res.writeHead(o ? 200 : 404);

@@ -122,13 +122,23 @@ class Store {
     return idx < 0 ? [] : s.log.slice(idx);
   }
 
+  /** Forget a meeting entirely. */
+  remove(id: string) {
+    const s = this.byId.get(id);
+    if (!s) return;
+    this.byId.delete(id);
+    if (this.byCode.get(s.info.code) === id) this.byCode.delete(s.info.code);
+    this.onRemove?.(id);
+  }
+
+  /** Called when a meeting is forgotten (to erase its slides and saved data). */
+  onRemove?: (id: string) => void;
+
+  /** Meetings left idle for a long time are closed and erased. */
   sweep() {
     const now = Date.now();
     for (const [id, s] of this.byId) {
-      if (now - s.lastActive > config.sessionIdleMs) {
-        this.byId.delete(id);
-        this.byCode.delete(s.info.code);
-      }
+      if (now - s.lastActive > config.sessionIdleMs) this.remove(id);
     }
   }
 }

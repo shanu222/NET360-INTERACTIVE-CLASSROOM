@@ -1,21 +1,13 @@
-import { r2Enabled } from './config.ts';
-import { getObject, putObject } from './storage.ts';
-
 /**
- * Slide images. With R2 configured they're stored there (they survive restarts);
- * otherwise they're kept in memory, up to a limit.
+ * Slide images, kept only in this server's memory while their meeting is live.
+ * They are never written to disk, a database or cloud storage, and are erased
+ * when the meeting ends (see dropSlides).
  */
-const MEMORY_LIMIT = 400 * 1024 * 1024;
+const MEMORY_LIMIT = 600 * 1024 * 1024;
 const memory = new Map<string, Buffer>();
 let memoryBytes = 0;
 
-const key = (img: string) => `slides/${img}`;
-
 export async function saveSlide(img: string, data: Buffer): Promise<void> {
-  if (r2Enabled) {
-    await putObject(key(img), data, 'image/jpeg');
-    return;
-  }
   if (memoryBytes + data.length > MEMORY_LIMIT) {
     // Forget the oldest slides to make room.
     for (const [k, v] of memory) {
@@ -29,8 +21,16 @@ export async function saveSlide(img: string, data: Buffer): Promise<void> {
 }
 
 export async function loadSlide(img: string): Promise<Buffer | null> {
-  const m = memory.get(img);
-  if (m) return m;
-  if (!r2Enabled) return null;
-  return getObject(key(img));
+  return memory.get(img) ?? null;
+}
+
+/** Erase every slide of a meeting. */
+export function dropSlides(sessionId: string) {
+  const prefix = `${sessionId}/`;
+  for (const [k, v] of memory) {
+    if (k.startsWith(prefix)) {
+      memory.delete(k);
+      memoryBytes -= v.length;
+    }
+  }
 }

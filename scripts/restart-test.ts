@@ -25,6 +25,7 @@ const env = {
   CLOUDFLARE_D1_DATABASE_ID: 'test',
   CLOUDFLARE_API_TOKEN: 'test',
   SNAPSHOT_EVERY_SECONDS: '60', // force the shutdown flush to do the saving
+  ERASE_AFTER_END_SECONDS: '2',
   R2_BUCKET: 'net360classroom',
   R2_ACCESS_KEY_ID: 'test',
   R2_SECRET_ACCESS_KEY: 'test',
@@ -147,12 +148,24 @@ async function main() {
   const people = await d1(`SELECT COUNT(*) AS n FROM session_participants WHERE session_id = '${session.id}'`);
   const hands = await d1(`SELECT COUNT(*) AS n FROM hand_raises WHERE session_id = '${session.id}'`);
   const snap = await d1(`SELECT strokes, location, bytes FROM board_snapshots WHERE session_id = '${session.id}'`);
-  console.log(`D1: session ${sessions[0]?.status}, attendance ${people[0]?.n} people, hands ${hands[0]?.n}`);
-  console.log(`Board saved in ${String(snap[0]?.location).toUpperCase()}: ${snap[0]?.strokes} strokes, ${snap[0]?.bytes} bytes`);
+  console.log(`D1 while live: meeting ${sessions[0]?.status}, attendance rows ${people[0]?.n}, hand rows ${hands[0]?.n} (none are kept)`);
+  console.log(`Board kept for the live meeting in ${String(snap[0]?.location).toUpperCase()}: ${snap[0]?.strokes} strokes, ${snap[0]?.bytes} bytes`);
+
+  // Ending the meeting leaves nothing behind.
+  teacher.sock.emit('end');
+  await sleep(3500);
+  const left: Record<string, number> = {};
+  for (const t of ['class_sessions', 'board_snapshots', 'chat_messages', 'session_settings', 'session_kind', 'session_participants', 'hand_raises']) {
+    const col = t === 'class_sessions' ? 'id' : 'session_id';
+    left[t] = Number((await d1(`SELECT COUNT(*) AS n FROM ${t} WHERE ${col} = '${session.id}'`))[0]?.n);
+  }
+  const r2Left = await fetch(`http://localhost:${D1_PORT}/net360classroom?list-type=2&prefix=boards/`, { headers: { Authorization: 'AWS4-HMAC-SHA256 x' } }).then((r) => r.text());
+  const erased = Object.values(left).every((n) => n === 0) && !r2Left.includes(session.id);
+  console.log(`After the meeting ended: ${erased ? 'nothing kept' : 'STILL STORED ' + JSON.stringify(left) + ' ' + r2Left}`);
 
   const ok =
     restored === everyone.length && newEpoch && synced === everyone.length && chatBack &&
-    people[0]?.n === 11 && hands[0]?.n === 1 && snap[0]?.location === 'r2';
+    people[0]?.n === 0 && hands[0]?.n === 0 && snap[0]?.location === 'r2' && erased;
   console.log(ok ? '\nPASS' : '\nFAIL');
   everyone.forEach((c) => c.sock.disconnect());
   await sleep(300);

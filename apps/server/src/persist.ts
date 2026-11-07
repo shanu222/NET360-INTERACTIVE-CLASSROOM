@@ -2,7 +2,7 @@ import { gunzipSync, gzipSync } from 'node:zlib';
 import type { BoardState, ChatMessage } from '@net360/protocol';
 import { config, dbEnabled, r2Enabled } from './config.ts';
 import { query, write } from './db.ts';
-import { boardKey, getObject, putObject } from './storage.ts';
+import { boardKey, deleteObject, getObject, listKeys, putObject } from './storage.ts';
 import { store, type Session } from './store.ts';
 
 /** D1 stores values up to 2 MB; stay safely under it. */
@@ -39,31 +39,6 @@ export const persist = {
     write(`INSERT OR REPLACE INTO session_kind (session_id, kind) VALUES (?, ?)`, [i.id, i.kind ?? 'class']);
   },
 
-  joined(s: Session, uid: string, name: string, role: 'teacher' | 'student') {
-    const now = Date.now();
-    write(
-      `INSERT INTO session_participants (session_id, user_id, name, role, joined_at, last_seen)
-       VALUES (?, ?, ?, ?, ?, ?)
-       ON CONFLICT (session_id, user_id) DO UPDATE SET last_seen = excluded.last_seen, name = excluded.name`,
-      [s.info.id, uid, name, role, now, now],
-    );
-  },
-
-  left(s: Session, uid: string) {
-    write(`UPDATE session_participants SET last_seen = ? WHERE session_id = ? AND user_id = ?`, [Date.now(), s.info.id, uid]);
-  },
-
-  handRaised(s: Session, uid: string) {
-    write(`INSERT INTO hand_raises (session_id, user_id, raised_at) VALUES (?, ?, ?)`, [s.info.id, uid, Date.now()]);
-  },
-
-  handLowered(s: Session, uid: string, by: 'student' | 'teacher') {
-    write(
-      `UPDATE hand_raises SET lowered_at = ?, lowered_by = ? WHERE session_id = ? AND user_id = ? AND lowered_at IS NULL`,
-      [Date.now(), by, s.info.id, uid],
-    );
-  },
-
   chat(s: Session, m: ChatMessage) {
     write(`INSERT INTO chat_messages (id, session_id, from_uid, from_name, to_uid, text, at) VALUES (?, ?, ?, ?, ?, ?, ?)`, [
       m.id, s.info.id, m.from, m.fromName, m.to, m.text, m.at,
@@ -75,11 +50,65 @@ export const persist = {
     if (dbEnabled) dirty.add(s.info.id);
   },
 
-  async ended(s: Session) {
-    await snapshot(s);
-    write(`UPDATE class_sessions SET status = 'ended', ended_at = ?, last_active = ? WHERE id = ?`, [Date.now(), Date.now(), s.info.id]);
-  },
 };
+
+/* ------------------------------------------------------------------ */
+/* Nothing is kept after a meeting                                     */
+/* ------------------------------------------------------------------ */
+
+/**
+ * While a meeting is live, its whiteboard and private messages are kept so a
+ * server update in the middle doesn't lose them. When it ends (or is left idle),
+ * all of it is erased: the board, messages, settings and the meeting itself.
+ * Slides are never stored at all (see slides.ts).
+ */
+export async function erase(sessionId: string) {
+  dirty.delete(sessionId);
+  if (!dbEnabled) return;
+  for (const table of ['board_snapshots', 'chat_messages', 'session_participants', 'hand_raises', 'session_settings', 'session_kind']) {
+    await query(`DELETE FROM ${table} WHERE session_id = ?`, [sessionId]).catch((e) => console.error(`[db] erase ${table}:`, (e as Error).message));
+  }
+  await query(`DELETE FROM class_sessions WHERE id = ?`, [sessionId]).catch((e) => console.error('[db] erase session:', (e as Error).message));
+  if (r2Enabled) await deleteObject(boardKey(sessionId)).catch((e) => console.error('[r2] erase board:', (e as Error).message));
+}
+
+/**
+ * Clear out anything left from meetings that are over: ended or long idle ones,
+ * attendance and raised hands from older versions, and slides stored in R2 by
+ * older versions. Runs when the server starts and every hour.
+ */
+export async function purgeOld(): Promise<number> {
+  if (!dbEnabled) return 0;
+  let n = 0;
+  try {
+    const old = await query<{ id: string }>(`SELECT id FROM class_sessions WHERE status != 'live' OR last_active < ?`, [Date.now() - config.sessionIdleMs]);
+    for (const { id } of old) {
+      if (store.get(id) && !store.get(id)!.ended) continue;
+      await erase(id);
+      n++;
+    }
+    await query(`DELETE FROM session_participants`);
+    await query(`DELETE FROM hand_raises`);
+    for (const t of ['board_snapshots', 'chat_messages', 'session_settings', 'session_kind']) {
+      await query(`DELETE FROM ${t} WHERE session_id NOT IN (SELECT id FROM class_sessions)`);
+    }
+  } catch (e) {
+    console.error('[db] purge:', (e as Error).message);
+  }
+  if (r2Enabled) {
+    try {
+      const live = new Set((await query<{ id: string }>(`SELECT id FROM class_sessions`)).map((r) => r.id));
+      for (const key of await listKeys('slides/')) await deleteObject(key);
+      for (const key of await listKeys('boards/')) {
+        const id = key.slice('boards/'.length).replace(/\.json\.gz$/, '');
+        if (!live.has(id)) await deleteObject(key);
+      }
+    } catch (e) {
+      console.error('[r2] purge:', (e as Error).message);
+    }
+  }
+  return n;
+}
 
 /* ------------------------------------------------------------------ */
 /* Board snapshots                                                     */
@@ -150,6 +179,7 @@ export async function flushAll() {
 export function startSnapshots() {
   if (!dbEnabled) return;
   setInterval(() => void tick(), config.snapshotEveryMs).unref();
+  setInterval(() => void purgeOld(), 3600_000).unref();
 }
 
 /* ------------------------------------------------------------------ */
