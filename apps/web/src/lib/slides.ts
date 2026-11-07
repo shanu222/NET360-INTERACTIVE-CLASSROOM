@@ -1,10 +1,18 @@
-import { BOARD_H, BOARD_W, MAX_SLIDES } from '@net360/protocol';
+import { BOARD_H, BOARD_W, MAX_SLIDES, type Rect } from '@net360/protocol';
 
 export const SLIDE_TYPES = '.pdf,application/pdf,image/png,image/jpeg,image/webp';
 
-/** Slides are stored at 1.5× the board size, so text stays sharp full screen. */
-const OUT_W = BOARD_W * 1.5;
-const OUT_H = BOARD_H * 1.5;
+/**
+ * Slides are stored at 1.5× the board size, so text stays sharp full screen; portrait
+ * pages (shown tall, using only the middle of the slide) at 2×.
+ */
+const scaleFor = (srcW: number, srcH: number) => (srcW / srcH < 1.2 ? 2 : 1.5);
+
+export interface Slide {
+  data: Uint8Array;
+  /** Where the page sits on the slide, in board units. */
+  fit: Rect;
+}
 
 /**
  * Fit a page or picture onto a board-shaped slide, as large as it goes. If its shape
@@ -12,6 +20,9 @@ const OUT_H = BOARD_H * 1.5;
  * of the slide's own border instead of white bars, so the slide reads edge to edge.
  */
 function frame(src: CanvasImageSource, srcW: number, srcH: number) {
+  const z = scaleFor(srcW, srcH);
+  const OUT_W = BOARD_W * z;
+  const OUT_H = BOARD_H * z;
   const c = document.createElement('canvas');
   c.width = OUT_W;
   c.height = OUT_H;
@@ -25,7 +36,13 @@ function frame(src: CanvasImageSource, srcW: number, srcH: number) {
   ctx.fillRect(0, 0, OUT_W, OUT_H);
   ctx.imageSmoothingQuality = 'high';
   ctx.drawImage(src, x, y, w, h);
-  return c;
+  const r = (n: number) => Math.round((n / z) * 100) / 100;
+  const fit: Rect = [r(x), r(y), r(w), r(h)];
+  return { c, fit };
+}
+
+async function slide(f: { c: HTMLCanvasElement; fit: Rect }): Promise<Slide> {
+  return { data: await toJpeg(f.c), fit: f.fit };
 }
 
 /** The average colour along the sides that will meet the spare space (white if unsure). */
@@ -65,11 +82,11 @@ async function toJpeg(c: HTMLCanvasElement): Promise<Uint8Array> {
  * Turn a PDF (e.g. PowerPoint → Save as PDF) or a picture into slide images, one per page.
  * Pages are rendered here in the browser, so the server only stores finished images.
  */
-export async function makeSlides(file: File, progress: (done: number, total: number) => void): Promise<Uint8Array[]> {
+export async function makeSlides(file: File, progress: (done: number, total: number) => void): Promise<Slide[]> {
   if (file.type.startsWith('image/')) {
     const bmp = await createImageBitmap(file);
     progress(1, 1);
-    return [await toJpeg(frame(bmp, bmp.width, bmp.height))];
+    return [await slide(frame(bmp, bmp.width, bmp.height))];
   }
   if (file.type !== 'application/pdf' && !/\.pdf$/i.test(file.name)) {
     throw new Error('Please choose a PDF or a picture. In PowerPoint or Google Slides, use “Download / Save as PDF”.');
@@ -79,17 +96,18 @@ export async function makeSlides(file: File, progress: (done: number, total: num
   pdfjs.GlobalWorkerOptions.workerSrc = worker;
   const doc = await pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
   const total = Math.min(doc.numPages, MAX_SLIDES);
-  const out: Uint8Array[] = [];
+  const out: Slide[] = [];
   for (let n = 1; n <= total; n++) {
     const page = await doc.getPage(n);
     const base = page.getViewport({ scale: 1 });
-    const scale = Math.min(OUT_W / base.width, OUT_H / base.height) * 1.25; // sharp text
+    const z = scaleFor(base.width, base.height);
+    const scale = Math.min((BOARD_W * z) / base.width, (BOARD_H * z) / base.height) * 1.25; // sharp text
     const vp = page.getViewport({ scale });
     const tmp = document.createElement('canvas');
     tmp.width = Math.ceil(vp.width);
     tmp.height = Math.ceil(vp.height);
     await page.render({ canvasContext: tmp.getContext('2d')!, viewport: vp }).promise;
-    out.push(await toJpeg(frame(tmp, tmp.width, tmp.height)));
+    out.push(await slide(frame(tmp, tmp.width, tmp.height)));
     page.cleanup();
     progress(n, total);
   }

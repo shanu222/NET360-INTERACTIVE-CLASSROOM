@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { PenHistory, PenInput, type BoardRenderer, type BoardSession, type PenSettings } from '@net360/board-engine';
-import { boardView, type BoardView } from '@net360/protocol';
+import { boardView, pageRect, type BoardView } from '@net360/protocol';
 import { Board } from './Board.tsx';
 import { Icon } from './Icons.tsx';
 
@@ -58,6 +58,13 @@ export function useFullscreen<T extends HTMLElement>() {
 }
 
 type Half = 'slide' | 'wb';
+
+/** The shape of a page as shown: a slide's own page, or the 16:9 board. */
+function shapeOf(board: BoardSession, pg: number | null): number {
+  if (pg === null) return 16 / 9;
+  const [, , w, h] = pageRect(board.state, pg);
+  return w / h;
+}
 
 /**
  * The flat board, as the class sees it: the whiteboard, the slides, or both side
@@ -163,6 +170,7 @@ export function Stage({
           }
           active={split && writable && current === half}
           boardClass={boardClass}
+          shape={shapeOf(board, half === 'slide' ? ((!split && browse ? look : null) ?? view.slide) : view.wb)}
           action={
             view.mode === 'split' ? (
               split ? (
@@ -224,9 +232,12 @@ function Pane({
   active,
   action,
   boardClass,
+  shape,
   children,
 }: {
   boardClass: string;
+  /** Width ÷ height of what this half shows (a portrait page is tall). */
+  shape: number;
   half: Half;
   board: BoardSession;
   look: number | null;
@@ -276,7 +287,14 @@ function Pane({
 
   return (
     <div className={`stagev__pane stagev__pane--${half} ${active ? 'is-active' : ''}`}>
-      <Board board={board} onRenderer={setR} writable={writable} className={boardClass}>
+      <Board
+        board={board}
+        onRenderer={setR}
+        writable={writable}
+        crop
+        className={`${boardClass} ${shape < 1.5 ? 'slate--page' : ''}`}
+        style={{ '--ar': shape } as CSSProperties}
+      >
         {children}
         {label && <span className="stagev__label">{label}</span>}
         {action && <span className="stagev__actions">{action}</span>}

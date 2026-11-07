@@ -1,4 +1,4 @@
-import { BOARD_H, BOARD_W, pageStrokes, type BoardState, type Stroke } from '@net360/protocol';
+import { BOARD_H, BOARD_W, pageRect, pageStrokes, type BoardState, type Rect, type Stroke } from '@net360/protocol';
 import type { BoardSession } from './session.ts';
 import { drawStroke, slideInk } from './draw.ts';
 
@@ -72,7 +72,11 @@ export class BoardRenderer {
   constructor(
     private host: HTMLElement,
     private session: BoardSession,
-    private opts: { dpr?: number } = {},
+    /**
+     * `crop`: show only the part of a slide page that holds the page (a portrait PDF
+     * page is a tall strip); the host is sized to that shape by its parent.
+     */
+    private opts: { dpr?: number; crop?: boolean } = {},
   ) {
     this.committed = document.createElement('canvas');
     this.live = document.createElement('canvas');
@@ -132,14 +136,20 @@ export class BoardRenderer {
     this.schedule();
   }
 
+  /** The part of the board on screen (all of it, or a slide's page when cropping). */
+  get view(): Rect {
+    return this.opts.crop ? pageRect(this.session.state, this.page) : [0, 0, BOARD_W, BOARD_H];
+  }
+
   /** Client coordinates → board units. */
   toBoard(clientX: number, clientY: number): [number, number] {
     const r = this.host.getBoundingClientRect();
-    return [((clientX - r.left) / r.width) * BOARD_W, ((clientY - r.top) / r.height) * BOARD_H];
+    const [vx, vy, vw, vh] = this.view;
+    return [vx + ((clientX - r.left) / r.width) * vw, vy + ((clientY - r.top) / r.height) * vh];
   }
 
   get pixelsPerUnit() {
-    return this.scale;
+    return this.scale * (BOARD_W / this.view[2]);
   }
 
   private resize() {
@@ -162,8 +172,10 @@ export class BoardRenderer {
   private prep(ctx: CanvasRenderingContext2D) {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-    const k = this.scale * this.dpr;
-    ctx.setTransform(k, 0, 0, k, 0, 0);
+    const [vx, vy, vw, vh] = this.view;
+    const kx = ctx.canvas.width / vw;
+    const ky = ctx.canvas.height / vh;
+    ctx.setTransform(kx, 0, 0, ky, -vx * kx, -vy * ky);
   }
 
   private frame() {

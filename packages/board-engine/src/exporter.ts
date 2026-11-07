@@ -1,17 +1,21 @@
-import { BOARD_H, BOARD_W, pageStrokes, type BoardState } from '@net360/protocol';
+import { BOARD_H, BOARD_W, pageRect, pageStrokes, type BoardState } from '@net360/protocol';
 import { BOARD_BG, drawStroke, slideInk } from './draw.ts';
 import { slideImage } from './renderer.ts';
 
-/** Render one board page to an offscreen canvas (for saving notes). */
-export function renderPage(state: BoardState, pg: number, width = 2400): HTMLCanvasElement {
+/**
+ * Render one board page to an offscreen canvas (for saving notes). A slide page is
+ * cut to the page itself (a portrait PDF page stays portrait); `long` is the longer side.
+ */
+export function renderPage(state: BoardState, pg: number, long = 2400): HTMLCanvasElement {
+  const [vx, vy, vw, vh] = pageRect(state, pg);
+  const k = long / Math.max(vw, vh);
   const c = document.createElement('canvas');
-  c.width = width;
-  c.height = Math.round((width * BOARD_H) / BOARD_W);
+  c.width = Math.round(vw * k);
+  c.height = Math.round(vh * k);
   const ctx = c.getContext('2d')!;
   ctx.fillStyle = BOARD_BG;
   ctx.fillRect(0, 0, c.width, c.height);
-  const k = width / BOARD_W;
-  ctx.setTransform(k, 0, 0, k, 0, 0);
+  ctx.setTransform(k, 0, 0, k, -vx * k, -vy * k);
   const bg = state.bg?.[pg];
   const im = bg ? slideImage(bg, () => undefined) : null;
   if (im) ctx.drawImage(im, 0, 0, BOARD_W, BOARD_H);

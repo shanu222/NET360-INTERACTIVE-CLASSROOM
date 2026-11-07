@@ -53,7 +53,17 @@ export interface PageGo { t: 'pg'; pg: number }
  * Add slides: each image becomes the background of a new page (in order), and the
  * class moves to the first one. Images are `<sessionId>/<id>.jpg` (see slideUrl).
  */
-export interface SlidesAdd { t: 'sl'; imgs: string[] }
+export interface SlidesAdd {
+  t: 'sl';
+  imgs: string[];
+  /**
+   * Where each page actually sits on its slide, in board units [x, y, w, h] — a
+   * portrait page is a tall strip in the middle. Screens show just that part, so
+   * the page fills the display in its own shape. Missing: the whole board.
+   */
+  fit?: Rect[];
+}
+export type Rect = [number, number, number, number];
 
 /**
  * What the class is looking at:
@@ -109,6 +119,8 @@ export interface BoardState {
   bg?: Record<number, string>;
   /** What the class is looking at (missing on older boards: worked out from `page`). */
   mode?: BoardMode;
+  /** Where the page sits on each slide (page → rect); see SlidesAdd. */
+  fit?: Record<number, Rect>;
   /** The current slide page (slides / split). */
   slide?: number;
   /** The current whiteboard page (board / split). */
@@ -262,7 +274,11 @@ export function applyEvent(s: BoardState, ev: BoardEventBody & { seq?: number })
       // A completely blank board starts the deck on page 1; otherwise slides go after.
       const blank = s.pages === 1 && !s.order.some((id) => !s.strokes[id]?.hidden) && !bg[0];
       const first = blank ? 0 : s.pages;
-      ev.imgs.forEach((img, i) => (bg[first + i] = img));
+      ev.imgs.forEach((img, i) => {
+        bg[first + i] = img;
+        const r = ev.fit?.[i];
+        if (r && validRect(r)) (s.fit ??= {})[first + i] = [r[0], r[1], r[2], r[3]];
+      });
       s.pages = first + ev.imgs.length;
       s.page = first;
       s.slide = first;
@@ -287,6 +303,17 @@ export function applyEvent(s: BoardState, ev: BoardEventBody & { seq?: number })
       return { structural: true };
     }
   }
+}
+
+export function validRect(r: unknown): r is Rect {
+  if (!Array.isArray(r) || r.length !== 4 || !r.every((n) => typeof n === 'number' && Number.isFinite(n))) return false;
+  const [x, y, w, h] = r as number[];
+  return x >= 0 && y >= 0 && w >= 40 && h >= 40 && x + w <= BOARD_W + 0.5 && y + h <= BOARD_H + 0.5;
+}
+
+/** The part of a page that holds its content: the slide's page, or the whole board. */
+export function pageRect(s: BoardState, pg: number): Rect {
+  return (s.bg?.[pg] && s.fit?.[pg]) || [0, 0, BOARD_W, BOARD_H];
 }
 
 /** Quantize board-unit points for transmission. */

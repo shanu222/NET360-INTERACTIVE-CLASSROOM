@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Socket } from 'socket.io-client';
 import type { AudioState, ClientToServer, ServerToClient } from '@net360/protocol';
-import type { RemoteVideoTrack, Room } from 'livekit-client';
+import type { LocalAudioTrack, RemoteVideoTrack, Room } from 'livekit-client';
+import { canDenoise } from './denoise.ts';
 
 export type AudioStatus = 'off' | 'connecting' | 'on' | 'error';
 
@@ -40,7 +41,19 @@ const SRC_SCREEN = 3;
 const allows = (perms: { canPublish: boolean; canPublishSources: number[] } | undefined, src: number) =>
   Boolean(perms?.canPublish) && (!perms!.canPublishSources.length || perms!.canPublishSources.includes(src));
 
-const MIC = { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
+/**
+ * Microphone capture tuned for speech: the browser removes echo and steady noise and
+ * evens out the level; one channel at 48 kHz. (Chrome's voice isolation is used where
+ * it exists.) Our own noise filter then cleans up what's left — see denoise.ts.
+ */
+const MIC = {
+  echoCancellation: true,
+  noiseSuppression: true,
+  autoGainControl: true,
+  channelCount: 1,
+  sampleRate: 48000,
+  voiceIsolation: true,
+} as MediaTrackConstraints;
 
 /**
  * Joins the class audio room (LiveKit). The teacher is always heard; a student may
@@ -93,7 +106,14 @@ export function useClassAudio(
         setStatus('error');
         return;
       }
-      room = new lk.Room({ adaptiveStream: false, dynacast: true, audioCaptureDefaults: MIC });
+      room = new lk.Room({
+        adaptiveStream: false,
+        dynacast: true,
+        audioCaptureDefaults: MIC,
+        // Clear speech: 48 kbps Opus, silence not sent, and each packet carried twice
+        // (RED) so a lost packet on a weak connection doesn't become a gap or crackle.
+        publishDefaults: { audioPreset: lk.AudioPresets.music, dtx: true, red: true, forceStereo: false },
+      });
       roomRef.current = room;
       const { RoomEvent, Track } = lk;
 
@@ -251,6 +271,7 @@ export function useClassAudio(
           new Promise((_, no) => setTimeout(() => no(new Error('timeout')), 20_000)),
         ]);
         setMicOn(true);
+        void cleanMic(room, lk);
         if (!room.canPlaybackAudio) void room.startAudio().then(() => setNeedsTap(false));
       } else {
         await lp.setMicrophoneEnabled(false);
@@ -288,4 +309,19 @@ export function useClassAudio(
   }, []);
 
   return { screen, sharing, shareBusy, shareScreen, canShare, status, needsTap, startSound, micOn, micBusy, setMic, micError, heard, setHeard, speaking, teacherLive };
+}
+
+/** Run the microphone through the noise filter (once per published track). */
+async function cleanMic(room: import('livekit-client').Room, lk: typeof import('livekit-client')) {
+  if (!canDenoise()) return;
+  const track = room.localParticipant.getTrackPublication(lk.Track.Source.Microphone)?.track as LocalAudioTrack | undefined;
+  if (!track || track.getProcessor()) return;
+  try {
+    const { NoiseFilter, denoiseContext } = await import('./denoise.ts');
+    track.setAudioContext(denoiseContext());
+    await track.setProcessor(new NoiseFilter());
+  } catch (e) {
+    // The browser's own noise reduction still applies.
+    console.warn('[audio] noise filter unavailable:', (e as Error)?.message ?? e);
+  }
 }

@@ -1408,7 +1408,7 @@ svg { display: block; }
 .stagev--split .stagev__pane--slide { flex-grow: 1.25; }
 /* Each board is as large as its half allows, keeping the 16:9 shape. */
 .stagev__pane .slate {
-  width: min(calc(100cqw - var(--frame) * 2 - 4px), calc((100cqh - var(--frame) * 2 - 14px) * 16 / 9));
+  width: min(calc(100cqw - var(--frame) * 2 - 4px), calc((100cqh - var(--frame) * 2 - 14px) * var(--ar, 16 / 9)));
 }
 .stagev__pane.is-active .slate { box-shadow: 0 0 0 var(--frame) var(--oak-dark), 0 0 0 calc(var(--frame) + 2px) rgba(242, 180, 76, 0.75), 0 30px 60px -28px rgba(0, 0, 0, 0.7); }
 .stagev__label {
@@ -1538,7 +1538,7 @@ svg { display: block; }
 @media (orientation: portrait) {
   .stagev--split .stagev__pane--slide { place-items: end center; }
   .stagev--split .stagev__pane--wb { place-items: start center; }
-  .stagev--split .stagev__pane .slate { width: min(calc(100cqw - var(--frame) * 2 - 4px), calc((100cqh - var(--frame) * 2 - 8px) * 16 / 9)); }
+  .stagev--split .stagev__pane .slate { width: min(calc(100cqw - var(--frame) * 2 - 4px), calc((100cqh - var(--frame) * 2 - 8px) * var(--ar, 16 / 9))); }
   .stagev--split { gap: 22px; }
 }
 .room__stage .rotate-hint { order: -1; margin: 0 0 10px; }
@@ -1703,7 +1703,7 @@ svg { display: block; }
 .room--display .room__stage > .stagebox:has(.stagev--slides, .stagev--split) { width: 100%; }
 .stagev--slides .slate::after, .stagev--split .stagev__pane--slide .slate::after { display: none; }
 .stagev--slides { --frame: clamp(3px, 0.35vw, 6px); }
-.stagev--slides .stagev__pane .slate { width: min(calc(100cqw - var(--frame) * 2), calc((100cqh - var(--frame) * 2) * 16 / 9)); }
+.stagev--slides .stagev__pane .slate { width: min(calc(100cqw - var(--frame) * 2), calc((100cqh - var(--frame) * 2) * var(--ar, 16 / 9))); }
 /* The pen dock (and its shapes menu) sits above the board. */
 .dock { z-index: 5; }
 .rail { z-index: 6; }
@@ -1711,3 +1711,8 @@ svg { display: block; }
 .room:has(.stagev--slides, .stagev--split) :is(.room__art, .room__plant, .room__shelf, .room__desk) { display: none; }
 .room--full .room__stage:has(.stagev--slides) { padding-top: max(50px, env(safe-area-inset-top)); padding-bottom: max(14px, env(safe-area-inset-bottom)); }
 .stagev--slides .stagev__full { top: 6px; right: 6px; bottom: auto; }
+
+/* Each board takes the shape of what it shows: 16:9 for the whiteboard and wide
+   slides, the page's own shape for portrait PDF pages. */
+.stagev__pane .slate { aspect-ratio: var(--ar, 16 / 9); }
+.stagev__pane .slate--page { background: #ffffff; }

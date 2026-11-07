@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { loadSlides, pagesWithInk, renderPage } from '@net360/board-engine';
-import type { BoardState, SessionInfo } from '@net360/protocol';
+import { pageRect, type BoardState, type SessionInfo } from '@net360/protocol';
 
 export type NotesResult = 'saved' | 'empty' | 'cancelled' | 'error';
 
@@ -36,11 +36,18 @@ export async function saveNotesPdf(state: BoardState, info: SessionInfo | undefi
 
   try {
     const [{ jsPDF }] = await Promise.all([import('jspdf'), loadSlides(state)]);
-    const pdf = new jsPDF({ orientation: 'landscape', unit: 'px', format: [1600, 900], hotfixes: ['px_scaling'], compress: true });
+    // Each PDF page takes the shape of its board page (portrait PDF pages stay portrait).
+    const size = (pg: number): [number, number] => {
+      const [, , w, h] = pageRect(state, pg);
+      return [w, h];
+    };
+    const [w0, h0] = size(pages[0]);
+    const pdf = new jsPDF({ orientation: w0 >= h0 ? 'landscape' : 'portrait', unit: 'px', format: [w0, h0], hotfixes: ['px_scaling'], compress: true });
     pdf.setProperties({ title: title || 'Meeto360 notes', creator: 'Meeto360' });
     pages.forEach((pg, i) => {
-      if (i > 0) pdf.addPage([1600, 900], 'landscape');
-      pdf.addImage(pageImage(state, pg), 'JPEG', 0, 0, 1600, 900);
+      const [w, h] = size(pg);
+      if (i > 0) pdf.addPage([w, h], w >= h ? 'landscape' : 'portrait');
+      pdf.addImage(pageImage(state, pg), 'JPEG', 0, 0, w, h);
     });
     const blob = pdf.output('blob');
 

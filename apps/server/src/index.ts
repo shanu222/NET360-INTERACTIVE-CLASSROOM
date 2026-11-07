@@ -26,7 +26,7 @@ import { mayTeach, userFromRequest, verifyUser } from './auth.ts';
 import { store, type Session } from './store.ts';
 import { mediaParticipants, mediaToken, setAllow } from './media.ts';
 import { loadSlide, saveSlide } from './slides.ts';
-import { BOARD_MODES, CLASS_SIZES, MAX_CLASS, MAX_SLIDES, SLIDE_RE } from '@net360/protocol';
+import { BOARD_MODES, CLASS_SIZES, MAX_CLASS, MAX_SLIDES, SLIDE_RE, validRect } from '@net360/protocol';
 import { migrate } from './db.ts';
 import { flushAll, persist, restoreLiveSessions, startSnapshots } from './persist.ts';
 import { padKeyFor } from './passes.ts';
@@ -191,7 +191,10 @@ function validEvent(ev: any): ev is BoardEventBody {
     case 'pg':
       return Number.isInteger(ev.pg);
     case 'sl':
-      return Array.isArray(ev.imgs) && ev.imgs.length >= 1 && ev.imgs.length <= MAX_SLIDES && ev.imgs.every((i: unknown) => typeof i === 'string' && SLIDE_RE.test(i));
+      return (
+        Array.isArray(ev.imgs) && ev.imgs.length >= 1 && ev.imgs.length <= MAX_SLIDES && ev.imgs.every((i: unknown) => typeof i === 'string' && SLIDE_RE.test(i)) &&
+        (ev.fit === undefined || (Array.isArray(ev.fit) && ev.fit.length === ev.imgs.length && ev.fit.every(validRect)))
+      );
     case 'md':
       return BOARD_MODES.includes(ev.m);
     default:

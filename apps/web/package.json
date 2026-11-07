@@ -11,6 +11,7 @@
   "dependencies": {
     "@net360/board-engine": "*",
     "@net360/protocol": "*",
+    "@sapphi-red/web-noise-suppressor": "^0.4.1",
     "firebase": "^11.0.2",
     "framer-motion": "^11.11.17",
     "jspdf": "^2.5.2",

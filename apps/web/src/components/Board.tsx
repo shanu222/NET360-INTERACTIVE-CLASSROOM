@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
 import { BoardRenderer, type BoardSession } from '@net360/board-engine';
 
 /**
@@ -11,7 +11,12 @@ export function Board({
   children,
   writable = false,
   className = '',
+  crop = false,
+  style,
 }: {
+  /** Show only a slide's page area (the slate takes the page's shape). */
+  crop?: boolean;
+  style?: CSSProperties;
   board: BoardSession;
   onRenderer?: (r: BoardRenderer | null) => void;
   children?: ReactNode;
@@ -23,16 +28,16 @@ export function Board({
   cb.current = onRenderer;
 
   useEffect(() => {
-    const r = new BoardRenderer(ink.current!, board);
+    const r = new BoardRenderer(ink.current!, board, { crop });
     cb.current?.(r);
     return () => {
       cb.current?.(null);
       r.destroy();
     };
-  }, [board]);
+  }, [board, crop]);
 
   return (
-    <div className={`slate ${writable ? 'slate--writable' : ''} ${className}`}>
+    <div className={`slate ${writable ? 'slate--writable' : ''} ${className}`} style={style}>
       <div className="slate__glass" />
       <div className="slate__ink" ref={ink} />
       {children}

@@ -86,7 +86,7 @@ export function useSlideUpload(socket: Socket<ServerToClient, ClientToServer> | 
       setProgress({ done: 0, total: 1, step: 'read' });
       const images = await makeSlides(file, (done, total) => setProgress({ done, total, step: 'read' }));
       const imgs: string[] = [];
-      for (const [i, data] of images.entries()) {
+      for (const [i, { data }] of images.entries()) {
         setProgress({ done: i, total: images.length, step: 'send' });
         const r = await new Promise<{ img: string } | { error: string }>((res) => {
           const t = window.setTimeout(() => res({ error: 'The connection is slow. Please try again.' }), 30_000);
@@ -100,7 +100,7 @@ export function useSlideUpload(socket: Socket<ServerToClient, ClientToServer> | 
         if ('error' in r) throw new Error(r.error);
         imgs.push(r.img);
       }
-      board.local({ t: 'sl', imgs });
+      board.local({ t: 'sl', imgs, fit: images.map((s) => s.fit) });
     } catch (e) {
       setError((e as Error).message || 'Couldn’t add those slides.');
     } finally {

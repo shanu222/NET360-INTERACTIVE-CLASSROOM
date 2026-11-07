@@ -15,7 +15,7 @@ import { Navigate } from 'react-router-dom';
 import { ChatPop, ChatThread, useIncoming, useUnread } from '../components/Chat.tsx';
 import { useClassAudio } from '../lib/audio.ts';
 import { AddSlides, ScreenStage, SlideNav, useSlideUpload } from '../components/Present.tsx';
-import { canSpeak } from '@net360/protocol';
+import { canSpeak, pageRect } from '@net360/protocol';
 import type { ChatMessage } from '@net360/protocol';
 import { words } from '../lib/words.ts';
 
@@ -130,6 +130,13 @@ export default function Student() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view.mode]);
+  // A portrait page reads best with the phone upright: no "turn sideways" hint then.
+  const portraitPage = (() => {
+    const pg = view.mode === 'board' ? null : view.slide;
+    if (pg === null) return false;
+    const [, , w, h] = pageRect(room.board.state, pg);
+    return w < h;
+  })();
   const toggle3d = () => {
     autoFlat.current = false;
     setIn3d((v) => !v);
@@ -507,7 +514,7 @@ export default function Student() {
       <div className="stagebox">
         <Stage board={room.board} view={view} browse onRenderer={setRenderer} />
       </div>
-      {!hideHint && (
+      {!hideHint && !portraitPage && (
         <button className="rotate-hint" onClick={() => setHideHint(true)}>
           <Icon.rotate /> Turn your phone sideways for a bigger board
         </button>
