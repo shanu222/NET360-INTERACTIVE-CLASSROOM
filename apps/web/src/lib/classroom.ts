@@ -14,6 +14,8 @@ export type Status = 'connecting' | 'live' | 'reconnecting' | 'ended' | 'error';
 export interface Classroom {
   status: Status;
   error: string | null;
+  /** The meeting ended: when, and whether this screen was in it then. */
+  ended: { at: number; live: boolean } | null;
   welcome: Welcome | null;
   cls: ClassState | null;
   roster: RosterEntry[];
@@ -60,6 +62,8 @@ export function useClassroom(
   if (location.hostname === 'localhost') (window as unknown as { __board?: BoardSession }).__board = board;
   const [socket, setSocket] = useState<Socket<ServerToClient, ClientToServer> | null>(null);
   const [status, setStatus] = useState<Status>('connecting');
+  /** When the meeting ended, and whether this screen was in it at the time. */
+  const [ended, setEnded] = useState<{ at: number; live: boolean } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [welcome, setWelcome] = useState<Welcome | null>(null);
   const [cls, setCls] = useState<ClassState | null>(null);
@@ -110,6 +114,12 @@ export function useClassroom(
       if (reason !== 'io client disconnect') setStatus('reconnecting');
     });
     s.on('connect_error', (err) => {
+      // Joining (or coming back) after the host ended the meeting: show it as ended.
+      if (!s.active && /ended|not exist/i.test(err.message)) {
+        setEnded((e) => e ?? { at: Date.now(), live: false });
+        setStatus('ended');
+        return;
+      }
       // Errors from the server's auth check are final; network errors retry.
       if (!s.active) {
         setError(err.message);
@@ -164,10 +174,13 @@ export function useClassroom(
     s.on('present', setPresent);
     s.on('typing', (from) => setTyping((t) => ({ ...t, [from]: Date.now() + 3500 })));
     s.on('ended', () => {
+      setEnded({ at: Date.now(), live: true });
       setStatus('ended');
       // The server erases the meeting's slides shortly; keep the ones not yet seen,
       // so notes can still be saved with every slide.
       void loadSlides(board.state);
+      // The meeting is over: leave it for good (no reconnecting, no stray errors).
+      s.disconnect();
     });
     s.on('fail', (m) => {
       setError(m);
@@ -217,5 +230,5 @@ export function useClassroom(
     };
   }, []);
 
-  return { status, error, welcome, cls, roster, people, hand, chats, audio, present, seen, typing, ...actions, board, socket };
+  return { status, error, ended, welcome, cls, roster, people, hand, chats, audio, present, seen, typing, ...actions, board, socket };
 }

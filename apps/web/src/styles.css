@@ -1716,3 +1716,40 @@ svg { display: block; }
    slides, the page's own shape for portrait PDF pages. */
 .stagev__pane .slate { aspect-ratio: var(--ar, 16 / 9); }
 .stagev__pane .slate--page { background: #ffffff; }
+
+/* ---------------------------------------------------------------------
+   Meeting ended
+   --------------------------------------------------------------------- */
+.veil--ended { z-index: 80; background: rgba(12, 10, 8, 0.7); backdrop-filter: blur(10px); }
+.ended { width: min(420px, 100%); gap: 12px; padding: 30px 28px 26px; justify-items: center; box-shadow: 0 30px 80px -24px rgba(0, 0, 0, 0.6); }
+.ended__icon { display: grid; place-items: center; width: 60px; height: 60px; border-radius: 50%; background: rgba(229, 72, 77, 0.12); color: #c4373c; margin-bottom: 2px; }
+.ended__icon svg { width: 30px; height: 30px; }
+.ended h2 { font-family: var(--sans); font-size: 22px; font-weight: 700; letter-spacing: -0.02em; }
+.ended .ended__meta { display: grid; gap: 2px; margin: -2px 0 2px; color: var(--ink-2); font-size: 15px; }
+.ended .ended__meta span { color: var(--ink-soft); font-size: 13.5px; }
+.ended p { font-size: 14.5px; }
+.ended .btn { justify-self: stretch; }
+.ended .btn svg { width: 18px; height: 18px; }
+.endnote {
+  position: fixed;
+  top: max(16px, env(safe-area-inset-top));
+  left: 50%;
+  translate: -50% 0;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: calc(100vw - 24px);
+  padding: 10px 18px 10px 10px;
+  border-radius: 99px;
+  background: #1c1712;
+  color: #f5efe4;
+  font-size: 14.5px;
+  box-shadow: 0 16px 40px -12px rgba(0, 0, 0, 0.6);
+}
+.endnote strong { font-weight: 700; }
+.endnote__icon { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: #e5484d; color: #fff; flex: none; }
+.endnote__icon svg { width: 17px; height: 17px; }
+.ended--tv { width: min(560px, 90vw); padding: 44px; } .ended--tv h2 { font-size: clamp(26px, 2.4vw, 44px); } .ended--tv p { font-size: clamp(16px, 1.2vw, 22px); }
+.stagev__full { top: 6px; right: 6px; bottom: auto; }
+.stagev.is-full .stagev__full { top: 14px; right: 14px; bottom: auto; }

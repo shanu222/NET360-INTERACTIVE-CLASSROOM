@@ -616,6 +616,8 @@ io.on('connection', (socket: Socket<ClientToServer, ServerToClient>) => {
     s.ended = true;
     s.cls.live = false;
     io.to(room(s)).emit('ended');
+    // Then close everyone's connection to it (each screen also leaves on its own).
+    setTimeout(() => io.in(room(s)).disconnectSockets(true), 1500).unref();
     // Screens fetch any slides they haven't shown yet (for saving notes), then
     // everything of this meeting is erased from the server.
     setTimeout(() => store.remove(s.info.id), ERASE_AFTER_END_MS).unref();

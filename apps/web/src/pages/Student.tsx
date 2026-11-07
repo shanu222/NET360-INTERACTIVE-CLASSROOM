@@ -17,7 +17,8 @@ import { useClassAudio } from '../lib/audio.ts';
 import { AddSlides, ScreenStage, SlideNav, useSlideUpload } from '../components/Present.tsx';
 import { canSpeak, pageRect } from '@net360/protocol';
 import type { ChatMessage } from '@net360/protocol';
-import { words } from '../lib/words.ts';
+import { Ended } from '../components/Ended.tsx';
+import { pagesWithInk } from '@net360/board-engine';
 
 /**
  * The student's classroom: the 3D room with the live board, classmates at
@@ -157,7 +158,6 @@ export default function Student() {
   if (!code || !guest.name) return <Navigate to="/join" replace />;
 
   const info = room.welcome?.session;
-  const w = words(info?.kind);
   const flash = (m: string) => {
     setToast(m);
     setTimeout(() => setToast(''), 2600);
@@ -445,23 +445,30 @@ export default function Student() {
         )}
       </AnimatePresence>
 
-      {(room.status === 'ended' || room.status === 'error') && (
+      {room.status === 'ended' && (
+        <Ended
+          info={info}
+          at={room.ended?.at ?? Date.now()}
+          live={room.ended?.live ?? false}
+          host={false}
+          hasNotes={pagesWithInk(room.board.state).length > 0}
+          saving={notes.busy}
+          onSave={save}
+          onHome={() => nav('/')}
+        />
+      )}
+      {room.status === 'error' && (
         <div className="veil">
           <div className="veil__card">
-            <h2>{room.status === 'ended' ? `The host ended the ${w.thing}` : "Couldn't join"}</h2>
-            <p>{room.status === 'ended' ? 'The notes from the board are ready to keep.' : friendly(room.error)}</p>
-            {room.status === 'ended' && (
-              <button className="btn btn--primary btn--wide" disabled={notes.busy} onClick={save}>
-                {notes.busy ? 'Preparing PDF…' : 'Save notes as PDF'}
-              </button>
-            )}
+            <h2>Couldn't join</h2>
+            <p>{friendly(room.error)}</p>
             {room.status === 'error' && /sign in|lost the connection/i.test(friendly(room.error) + (room.error ?? '')) && (
               <button className="btn btn--primary btn--wide" onClick={() => window.location.reload()}>
                 Try again
               </button>
             )}
-            <button className="btn btn--ghost btn--wide" onClick={() => nav(room.status === 'error' ? '/join' : '/')}>
-              {room.status === 'error' ? 'Join again' : 'Leave'}
+            <button className="btn btn--ghost btn--wide" onClick={() => nav('/join')}>
+              Join again
             </button>
           </div>
         </div>

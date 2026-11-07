@@ -9,6 +9,8 @@ export const Icon = {
   mail: () => (<svg viewBox="0 0 24 24" {...P}><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3.5 6.5l8.5 6.5 8.5-6.5" /></svg>),
   video: () => (<svg viewBox="0 0 24 24" {...P}><rect x="3" y="6" width="13" height="12" rx="2" /><path d="M16 10.5l5-3v9l-5-3z" /></svg>),
   enter: () => (<svg viewBox="0 0 24 24" {...P}><path d="M10 17l5-5-5-5M15 12H3M14 4h5a2 2 0 012 2v12a2 2 0 01-2 2h-5" /></svg>),
+  callEnd: () => (<svg viewBox="0 0 24 24" {...P}><path d="M3.6 14.6c-.5-.5-.6-1.3-.1-1.9C5.8 10.1 8.8 8.7 12 8.7s6.2 1.4 8.5 4c.5.6.4 1.4-.1 1.9l-1.6 1.5c-.5.5-1.3.5-1.8.1l-1.7-1.3c-.4-.3-.6-.8-.5-1.3l.2-1.3a11 11 0 00-6 0l.2 1.3c.1.5-.1 1-.5 1.3l-1.7 1.3c-.5.4-1.3.4-1.8-.1z" /></svg>),
+  home: () => (<svg viewBox="0 0 24 24" {...P}><path d="M4 11l8-7 8 7M6 9.5V20h12V9.5" /><path d="M10 20v-5h4v5" /></svg>),
   split: () => (<svg viewBox="0 0 24 24" {...P}><rect x="2.5" y="6" width="9" height="12" rx="1.2" /><rect x="12.5" y="6" width="9" height="12" rx="1.2" /></svg>),
   whiteboard: () => (<svg viewBox="0 0 24 24" {...P}><rect x="3" y="4" width="18" height="13" rx="1.5" /><path d="M7 21l2-4M17 21l-2-4M7.5 12.5l3-3 2 2 4-4" /></svg>),
   fullscreen: () => (<svg viewBox="0 0 24 24" {...P}><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" /></svg>),

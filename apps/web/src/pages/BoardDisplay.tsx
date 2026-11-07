@@ -109,7 +109,18 @@ export default function BoardDisplay() {
       {title}
       {media.screen && <ScreenStage screen={media.screen} tv />}
 
-      {room.status === 'ended' && <div className="display-end">Class has ended · Thank you for joining</div>}
+      {room.status === 'ended' && (
+        <div className="veil veil--ended">
+          <div className="veil__card ended ended--tv">
+            <span className="ended__icon">
+              <Icon.callEnd />
+            </span>
+            <h2>The {info?.kind === 'meeting' ? 'meeting' : 'class'} has ended</h2>
+            {info && <p className="ended__meta"><strong>{info.subject}</strong></p>}
+            <p>Thank you for joining.</p>
+          </div>
+        </div>
+      )}
       {room.status === 'error' && (
         <div className="veil">
           <div className="veil__card">

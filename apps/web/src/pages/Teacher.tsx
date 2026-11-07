@@ -1,7 +1,7 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { INK, type BoardRenderer, type PenInput, type PenSettings } from '@net360/board-engine';
+import { INK, pagesWithInk, type BoardRenderer, type PenInput, type PenSettings } from '@net360/board-engine';
 import { useAuth } from '../lib/auth.tsx';
 import { useClassroom } from '../lib/classroom.ts';
 import { api, boardUrl, joinUrl, padUrl } from '../lib/api.ts';
@@ -15,6 +15,7 @@ import { Code, QR } from '../components/QR.tsx';
 import { Icon } from '../components/Icons.tsx';
 import { StatusPill, friendly } from './Student.tsx';
 import { words } from '../lib/words.ts';
+import { Ended } from '../components/Ended.tsx';
 import { Classroom3D, can3d, prefers3d, roomStudents } from '../lib/webgl.ts';
 import { Lobby } from '../components/Lobby.tsx';
 import { ChatPop, ChatThread, useIncoming, useUnread } from '../components/Chat.tsx';
@@ -733,22 +734,28 @@ export default function Teacher() {
         </aside>
       </div>
 
-      {(notTeacher || room.status === 'error' || room.status === 'ended') && (
+      {room.status === 'ended' && (
+        <Ended
+          info={info}
+          at={room.ended?.at ?? Date.now()}
+          live={room.ended?.live ?? false}
+          host
+          hasNotes={pagesWithInk(room.board.state).length > 0}
+          saving={notes.busy}
+          onSave={notes.save}
+          onHome={() => nav('/')}
+          onNew={() => nav('/?create')}
+        />
+      )}
+      {(notTeacher || room.status === 'error') && room.status !== 'ended' && (
         <div className="veil">
           <div className="veil__card">
-            <h2>{room.status === 'ended' ? `${w.Thing} ended` : notTeacher ? `You’re not the host of this ${w.thing}` : `Could not open the ${w.thing}`}</h2>
+            <h2>{notTeacher ? `You’re not the host of this ${w.thing}` : `Could not open the ${w.thing}`}</h2>
             <p>
-              {room.status === 'ended'
-                ? 'Save the notes before you leave.'
-                : notTeacher
-                  ? `Only the host who created this ${w.thing} can run it. Sign in with that account, or join with the code.`
-                  : friendly(room.error, 'teacher')}
+              {notTeacher
+                ? `Only the host who created this ${w.thing} can run it. Sign in with that account, or join with the code.`
+                : friendly(room.error, 'teacher')}
             </p>
-            {room.status === 'ended' && (
-              <button className="btn btn--primary btn--wide" disabled={notes.busy} onClick={notes.save}>
-                {notes.busy ? 'Preparing PDF…' : 'Save notes as PDF'}
-              </button>
-            )}
             <button className="btn btn--ghost btn--wide" onClick={() => nav('/')}>
               Back to start
             </button>
