@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import type { BoardRenderer } from '@net360/board-engine';
 import { useClassroom } from '../lib/classroom.ts';
 import { useIdle, usePageInfo } from '../lib/hooks.ts';
-import { saveNotesPdf } from '../lib/notes.ts';
+import { useSaveNotes } from '../lib/notes.ts';
 import { Classroom3D, can3d, prefers3d, roomStudents } from '../lib/webgl.ts';
 import { Environment } from '../components/Environment.tsx';
 import { Stage, useBoardView } from '../components/Stage.tsx';
@@ -139,6 +139,13 @@ export default function Student() {
   const [atBoard, setAtBoard] = useState(false);
   const zoomTo = (t: number) => setZoomCmd((z) => ({ t, n: z.n + 1 }));
   const entering = Boolean((loc.state as { entering?: boolean } | null)?.entering);
+  const notes = useSaveNotes(
+    () => ({ state: room.board.state, info: room.welcome?.session }),
+    (m) => {
+      setToast(m);
+      setTimeout(() => setToast(''), 2600);
+    },
+  );
 
   if (!code || !guest.name) return <Navigate to="/join" replace />;
 
@@ -148,10 +155,9 @@ export default function Student() {
     setToast(m);
     setTimeout(() => setToast(''), 2600);
   };
-  const save = async () => {
+  const save = () => {
     setMenu(false);
-    const ok = await saveNotesPdf(room.board.state, info);
-    flash(ok ? 'Notes saved' : 'Nothing written yet');
+    notes.save();
   };
 
   // Things that sit on the board, in both the 3D and the flat view.
@@ -438,8 +444,8 @@ export default function Student() {
             <h2>{room.status === 'ended' ? `The host ended the ${w.thing}` : "Couldn't join"}</h2>
             <p>{room.status === 'ended' ? 'The notes from the board are ready to keep.' : friendly(room.error)}</p>
             {room.status === 'ended' && (
-              <button className="btn btn--primary btn--wide" onClick={save}>
-                Save notes as PDF
+              <button className="btn btn--primary btn--wide" disabled={notes.busy} onClick={save}>
+                {notes.busy ? 'Preparing PDF…' : 'Save notes as PDF'}
               </button>
             )}
             {room.status === 'error' && /sign in|lost the connection/i.test(friendly(room.error) + (room.error ?? '')) && (

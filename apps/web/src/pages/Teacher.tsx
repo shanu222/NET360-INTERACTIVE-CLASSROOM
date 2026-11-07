@@ -5,7 +5,7 @@ import { INK, type BoardRenderer, type PenInput, type PenSettings } from '@net36
 import { useAuth } from '../lib/auth.tsx';
 import { useClassroom } from '../lib/classroom.ts';
 import { api, boardUrl, joinUrl, padUrl } from '../lib/api.ts';
-import { saveNotesPdf } from '../lib/notes.ts';
+import { useSaveNotes } from '../lib/notes.ts';
 import { Environment } from '../components/Environment.tsx';
 import { ModeBar, Stage, useBoardView } from '../components/Stage.tsx';
 import { SLIDE_TYPES } from '../lib/slides.ts';
@@ -248,6 +248,14 @@ export default function Teacher() {
     return () => clearTimeout(t);
   }, [room.roster, room.welcome]);
 
+  const notes = useSaveNotes(
+    () => ({ state: room.board.state, info: room.welcome?.session }),
+    (m) => {
+      setAudioNote(m);
+      window.setTimeout(() => setAudioNote(''), 3000);
+    },
+  );
+
   const hands = useMemo(
     () => room.roster.filter((r) => r.hand && r.online).sort((a, b) => (a.handAt ?? 0) - (b.handAt ?? 0)),
     [room.roster],
@@ -404,7 +412,7 @@ export default function Teacher() {
                     {slides.progress.step === 'read' ? 'Preparing' : 'Sending'} {slides.progress.done}/{slides.progress.total}…
                   </span>
                 )}
-                <button aria-label="Save notes" title="Save notes as PDF" onClick={() => saveNotesPdf(room.board.state, info)}>
+                <button aria-label="Save notes" title="Save notes as PDF" disabled={notes.busy} onClick={notes.save}>
                   <Icon.download />
                 </button>
                 {document.fullscreenEnabled && (
@@ -737,8 +745,8 @@ export default function Teacher() {
                   : friendly(room.error, 'teacher')}
             </p>
             {room.status === 'ended' && (
-              <button className="btn btn--primary btn--wide" onClick={() => saveNotesPdf(room.board.state, info)}>
-                Save notes as PDF
+              <button className="btn btn--primary btn--wide" disabled={notes.busy} onClick={notes.save}>
+                {notes.busy ? 'Preparing PDF…' : 'Save notes as PDF'}
               </button>
             )}
             <button className="btn btn--ghost btn--wide" onClick={() => nav('/')}>

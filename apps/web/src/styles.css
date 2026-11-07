@@ -1693,3 +1693,5 @@ svg { display: block; }
 .signin__links { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .signin__ok { margin: 0; padding: 10px 12px; border-radius: 10px; background: rgba(63, 157, 106, 0.12); color: #2c6e4a; font-size: 14px; }
 @media (max-width: 380px) { .kindpick button small { display: none; } }
+/* Messages stay visible over the end-of-class card. */
+.veil ~ .toast, .toast { z-index: 25; }
