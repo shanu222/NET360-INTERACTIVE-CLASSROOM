@@ -1380,3 +1380,278 @@ svg { display: block; }
   .stage__what { display: none; }
 }
 .toast--high { bottom: calc(max(16px, env(safe-area-inset-bottom)) + 140px); z-index: 9; }
+
+/* ---------------------------------------------------------------------
+   Stage: whiteboard, slides, or both side by side
+   --------------------------------------------------------------------- */
+.stagebox { width: 100%; height: 100%; min-height: 0; }
+.stagev {
+  --frame: clamp(5px, 0.7vw, 12px);
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(14px, 1.8vw, 28px);
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+.stagev__pane {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  height: 100%;
+  container-type: size;
+  display: grid;
+  place-items: center;
+}
+.stagev--split .stagev__pane--slide { flex-grow: 1.25; }
+/* Each board is as large as its half allows, keeping the 16:9 shape. */
+.stagev__pane .slate {
+  width: min(calc(100cqw - var(--frame) * 2 - 4px), calc((100cqh - var(--frame) * 2 - 14px) * 16 / 9));
+}
+.stagev__pane.is-active .slate { box-shadow: 0 0 0 var(--frame) var(--oak-dark), 0 0 0 calc(var(--frame) + 2px) rgba(242, 180, 76, 0.75), 0 30px 60px -28px rgba(0, 0, 0, 0.7); }
+.stagev__label {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 3;
+  padding: 4px 10px;
+  border-radius: 99px;
+  background: rgba(10, 16, 14, 0.62);
+  color: var(--chalk);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+.stagev__actions { position: absolute; top: 8px; right: 8px; z-index: 3; display: flex; gap: 6px; }
+.stagev__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 34px;
+  height: 34px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 10px;
+  background: rgba(10, 16, 14, 0.62);
+  color: var(--chalk);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.stagev__btn svg { width: 17px; height: 17px; }
+.stagev__btn:hover { background: rgba(10, 16, 14, 0.85); }
+.stagev__full {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  z-index: 4;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 10px;
+  background: rgba(10, 16, 14, 0.55);
+  color: var(--chalk);
+  opacity: 0.75;
+  transition: opacity 0.2s;
+}
+.stagev__full:hover { opacity: 1; }
+.stagev__full svg { width: 18px; height: 18px; }
+.stagev__pager { bottom: 10px; }
+.stagev__live { top: 10px; }
+/* Full screen: the stage on black, as large as the screen allows. */
+.stagev.is-full { padding: 14px; background: #0d0b09; }
+.stagev.is-full .stagev__full { right: 14px; bottom: 14px; }
+.stagev--cover { position: fixed; inset: 0; z-index: 60; padding: max(14px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) max(14px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left)); }
+/* Tall screens (phones held upright): the two halves stack. */
+@media (orientation: portrait) {
+  .stagev--split { flex-direction: column; }
+  .stagev--split .stagev__pane { width: 100%; height: auto; flex: 1 1 0; min-height: 0; }
+}
+
+/* Teacher: the stage fills the space between the tools. */
+.console__stage { width: 100%; height: var(--bh); min-height: 0; }
+
+/* Student flat view and the classroom screen */
+.room__stage > .stagebox { flex: 1; }
+.stagebox--tv { height: 100%; }
+
+/* Teacher: what the class sees, and where in it */
+.modebar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  max-width: 100%;
+  color: var(--ivory);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  transition: opacity 0.45s var(--ease);
+}
+.modebar.is-quiet { opacity: 0.3; }
+.modebar:hover { opacity: 1; }
+.modebar__seg, .modebar__nav {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 99px;
+  background: var(--glass);
+  backdrop-filter: blur(14px);
+  border: 1px solid var(--glass-line);
+}
+.modebar__seg button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 34px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 99px;
+  background: none;
+  color: rgba(245, 239, 228, 0.78);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.modebar__seg button svg { width: 17px; height: 17px; }
+.modebar__seg button:hover:not(:disabled) { color: var(--ivory); background: rgba(245, 239, 228, 0.08); }
+.modebar__seg button.is-on { background: var(--amber); color: #2a1d0c; }
+.modebar__nav span { padding: 0 8px; white-space: nowrap; }
+.modebar__nav button { display: grid; place-items: center; width: 34px; height: 34px; border: 0; border-radius: 50%; background: none; color: rgba(245, 239, 228, 0.85); }
+.modebar__nav button:hover:not(:disabled) { background: rgba(245, 239, 228, 0.1); }
+.modebar__nav button svg { width: 18px; height: 18px; }
+.modebar__busy { color: var(--amber); }
+@media (max-width: 900px) {
+  .modebar__seg button { padding: 0 11px; }
+  .modebar__seg button span { display: none; }
+}
+.room__stage > .stagebox { width: var(--bw); max-width: 100%; }
+.room__stage > .stagebox:has(.stagev--split) { width: 100%; }
+.board-page--slide { padding: 3px 10px; border-radius: 99px; background: rgba(10, 16, 14, 0.55); color: rgba(244, 241, 234, 0.85); }
+/* Upright phones: the two halves sit together in the middle. */
+@media (orientation: portrait) {
+  .stagev--split .stagev__pane--slide { place-items: end center; }
+  .stagev--split .stagev__pane--wb { place-items: start center; }
+  .stagev--split .stagev__pane .slate { width: min(calc(100cqw - var(--frame) * 2 - 4px), calc((100cqh - var(--frame) * 2 - 8px) * 16 / 9)); }
+  .stagev--split { gap: 22px; }
+}
+.room__stage .rotate-hint { order: -1; margin: 0 0 10px; }
+
+/* Starting a class: how many students */
+.sizes { margin: 0; padding: 0; border: 0; }
+.sizes legend { padding: 0; margin-bottom: 6px; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-soft); }
+.sizes__row { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.sizes__row button {
+  height: 42px;
+  padding: 0 4px;
+  border: 1px solid rgba(42, 33, 25, 0.16);
+  border-radius: 10px;
+  background: #fffaf2;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink-2);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.sizes__row button.is-on { border-color: var(--amber-deep); background: rgba(242, 180, 76, 0.2); color: var(--ink); box-shadow: 0 0 0 3px rgba(242, 180, 76, 0.18); }
+.field .sizes__hint { font-size: 12.5px; font-weight: 400; letter-spacing: 0; text-transform: none; color: var(--ink-soft); }
+@media (max-width: 380px) { .sizes__row button { font-size: 13px; } }
+
+/* ---------------------------------------------------------------------
+   Teacher console on tablets and phones
+   --------------------------------------------------------------------- */
+/* Narrower screens: labels give way to icons in the top bar. */
+@media (max-width: 1100px) {
+  .console-bar .seg button span, .btn--muteall span { display: none; }
+  .console-bar__right { gap: 8px; }
+}
+@media (max-width: 760px) {
+  .console-bar { padding: 0 10px; gap: 8px; }
+  .console-bar__title .muted, .micbtn span, .btn--end span, .pill--ok { display: none; }
+  .console-bar__title { gap: 8px; }
+  .console-bar__right { gap: 6px; }
+  .console-bar .pill { padding: 0 9px; }
+  .console-bar .seg button { padding: 0 9px; }
+}
+
+/* Held upright (phones, tablets): the board across the top, the tools in rows beneath. */
+@media (orientation: portrait) and (max-width: 1100px) {
+  .console {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    padding: 8px 8px max(10px, env(safe-area-inset-bottom));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .console__board { order: 1; gap: 12px; --bh: auto; }
+  .console__stage { height: calc((100vw - 16px) * 9 / 16 + 18px); }
+  .console__stage:has(.stagev--split) { height: calc((100vw - 16px) * 9 / 8 + 48px); }
+  .dock { order: 2; flex-direction: row; flex-wrap: wrap; justify-content: center; align-self: center; max-width: 100%; border-radius: 18px; }
+  .dock--quiet { opacity: 1; }
+  .dock__group { flex-direction: row; flex-wrap: wrap; justify-content: center; }
+  .dock__group + .dock__group { padding-top: 0; border-top: 0; padding-left: 8px; border-left: 1px solid var(--glass-line); }
+  .dock__flyout { left: -4px; top: auto; bottom: 50px; }
+  .rail { order: 3; flex-direction: row; flex-wrap: wrap; justify-content: center; align-self: center; position: static; }
+  .rail.is-quiet { opacity: 1; }
+  .rail__btn { width: auto; min-width: 64px; padding: 9px 12px 7px; }
+  /* Panels open as a sheet from the bottom. */
+  .panel, .panel--class, .panel--pen, .panel--chat, .panel--present {
+    position: fixed;
+    left: 8px;
+    right: 8px;
+    top: auto;
+    bottom: max(8px, env(safe-area-inset-bottom));
+    width: auto;
+    max-height: 74dvh;
+    z-index: 30;
+  }
+  .panel--chat { height: 74dvh; }
+  .classview { height: 180px; aspect-ratio: auto; }
+}
+@media (orientation: portrait) and (max-width: 420px) {
+  .dock { padding: 6px; gap: 4px; }
+  .dock__btn { width: 38px; height: 38px; }
+  .dock__swatch { width: 24px; height: 24px; }
+  .dock__group + .dock__group { padding-left: 6px; }
+  .rail__btn { min-width: 0; padding: 8px 9px 6px; font-size: 10.5px; }
+  .modebar__nav span { padding: 0 4px; }
+}
+
+/* Phones turned sideways: the board fills the middle, slim tool columns either side. */
+@media (orientation: landscape) and (max-height: 520px) {
+  .console-bar { height: 44px; }
+  .console { inset: 44px 0 0; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; padding: 2px max(8px, env(safe-area-inset-right)) 6px max(8px, env(safe-area-inset-left)); }
+  .console__board { --bh: calc(100dvh - 44px - 62px); gap: 6px; }
+  .dock { padding: 4px; gap: 2px; border-radius: 14px; }
+  .dock__group { display: grid; grid-template-columns: repeat(2, 32px); gap: 2px; justify-items: center; }
+  .dock__group + .dock__group { padding-top: 4px; }
+  .dock__btn { width: 32px; height: 32px; border-radius: 9px; }
+  .dock__btn svg { width: 18px; height: 18px; }
+  .dock__swatch { width: 22px; height: 22px; margin: 1px; }
+  .dock__flyout { left: 74px; }
+  .rail { gap: 5px; }
+  .rail__btn { width: 48px; padding: 7px 0; gap: 0; border-radius: 12px; }
+  .rail__btn > span:last-child:not(.rail__hand) { display: none; }
+  .rail__btn svg { width: 20px; height: 20px; }
+  .panel { right: 58px; max-height: calc(100dvh - 60px); }
+  .panel--class { width: min(420px, calc(100vw - 140px)); }
+  .classview { height: 150px; aspect-ratio: auto; }
+  .modebar { gap: 6px; }
+  .modebar__seg, .modebar__nav { padding: 2px; }
+  .modebar__seg button { height: 30px; }
+  .modebar__nav button { width: 30px; height: 30px; }
+}
+.console--3d .modebar { pointer-events: auto; }
+@media (orientation: portrait) and (max-width: 1100px) {
+  /* In the 3D room the tools gather at the bottom, leaving the board in view. */
+  .console--3d { justify-content: flex-end; overflow: visible; }
+}
+.btn--end { gap: 0; }

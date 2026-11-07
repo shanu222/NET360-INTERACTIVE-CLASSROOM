@@ -16,6 +16,8 @@
     "test:restart": "tsx scripts/restart-test.ts",
     "test:chat": "tsx scripts/chat-test.ts",
     "test:present": "tsx scripts/present-test.ts",
+    "test:modes": "tsx scripts/modes-test.ts",
+    "test:capacity": "tsx scripts/capacity-test.ts",
     "db:local": "node scripts/d1-local.mjs"
   },
   "devDependencies": {

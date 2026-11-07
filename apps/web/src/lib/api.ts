@@ -17,11 +17,11 @@ async function call<T>(path: string, init: RequestInit & { headers?: Record<stri
 }
 
 export const api = {
-  startClass: (headers: Record<string, string>, subject: string, topic: string) =>
+  startClass: (headers: Record<string, string>, subject: string, topic: string, size: number) =>
     call<{ session: SessionInfo; boardKey: string; padKey: string }>('/api/sessions', {
       method: 'POST',
       headers,
-      body: JSON.stringify({ subject, topic }),
+      body: JSON.stringify({ subject, topic, size }),
     }),
   owner: (headers: Record<string, string>, id: string) =>
     call<{ session: SessionInfo; boardKey: string; padKey: string }>(`/api/sessions/${id}/owner`, { headers }),

@@ -48,12 +48,12 @@ class Store {
   private byId = new Map<string, Session>();
   private byCode = new Map<string, string>();
 
-  create(teacher: { uid: string; name: string }, subject: string, topic: string): Session {
+  create(teacher: { uid: string; name: string }, subject: string, topic: string, size = 40): Session {
     let code = makeCode();
     while (this.byCode.has(code)) code = makeCode();
     const id = nanoid(12);
     const s: Session = {
-      info: { id, code, subject, topic, teacherName: teacher.name, startedAt: Date.now() },
+      info: { id, code, subject, topic, teacherName: teacher.name, startedAt: Date.now(), size },
       teacherUid: teacher.uid,
       boardKey: nanoid(24),
       board: emptyBoard(),

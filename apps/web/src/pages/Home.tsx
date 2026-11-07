@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { CODE_ALPHABET } from '@net360/protocol';
+import { CLASS_SIZES, CODE_ALPHABET } from '@net360/protocol';
 import { useAuth } from '../lib/auth.tsx';
 import { api } from '../lib/api.ts';
 import { SignIn } from '../components/SignIn.tsx';
@@ -17,6 +17,14 @@ export default function Home() {
   const [code, setCode] = useState('');
   const [subject, setSubject] = useState('Physics');
   const [topic, setTopic] = useState('');
+  const [size, setSize] = useState<number>(() => {
+    try {
+      const n = Number(localStorage.getItem('n360.size'));
+      return (CLASS_SIZES as readonly number[]).includes(n) ? n : CLASS_SIZES[0];
+    } catch {
+      return CLASS_SIZES[0];
+    }
+  });
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   // Only the Meeto360 admin account can start and teach classes.
@@ -45,7 +53,12 @@ export default function Home() {
     setBusy(true);
     setErr('');
     try {
-      const r = await api.startClass(await headers(), subject, topic.trim());
+      try {
+        localStorage.setItem('n360.size', String(size));
+      } catch {
+        /* private mode */
+      }
+      const r = await api.startClass(await headers(), subject, topic.trim(), size);
       nav(`/teach/${r.session.id}`, { state: { boardKey: r.boardKey, padKey: r.padKey } });
     } catch (ex) {
       setErr((ex as Error).message);
@@ -146,6 +159,26 @@ export default function Home() {
               <span>Today's topic</span>
               <input value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="e.g. Heat and Thermodynamics" maxLength={120} />
             </label>
+            <fieldset className="field sizes">
+              <legend>Students expected (up to)</legend>
+              <div className="sizes__row" role="radiogroup" aria-label="Students expected">
+                {CLASS_SIZES.map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    role="radio"
+                    aria-checked={size === n}
+                    className={size === n ? 'is-on' : ''}
+                    onClick={() => setSize(n)}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
+              <span className="sizes__hint">
+                {size <= 40 ? 'A classroom with desks for 40.' : size <= 60 ? 'A larger classroom with 64 desks.' : size <= 150 ? 'A lecture room with seats for 150.' : size <= 300 ? 'A lecture hall with seats for 300.' : 'An auditorium with seats for 500.'}
+              </span>
+            </fieldset>
             <button className="btn btn--primary btn--wide" disabled={busy}>
               {busy ? 'Opening your classroom…' : 'Start class'}
             </button>

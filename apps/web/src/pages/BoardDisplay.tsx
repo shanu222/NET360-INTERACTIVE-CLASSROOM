@@ -6,13 +6,13 @@ import { useClassroom } from '../lib/classroom.ts';
 import { useIdle, usePageInfo, useWakeLock } from '../lib/hooks.ts';
 import { joinUrl } from '../lib/api.ts';
 import { Environment } from '../components/Environment.tsx';
-import { Classroom3D, can3d } from '../lib/webgl.ts';
+import { Classroom3D, can3d, roomStudents } from '../lib/webgl.ts';
 import { friendly } from './Student.tsx';
-import { Board } from '../components/Board.tsx';
 import { Code, QR } from '../components/QR.tsx';
 import { Icon } from '../components/Icons.tsx';
 import { useClassAudio } from '../lib/audio.ts';
 import { ScreenStage } from '../components/Present.tsx';
+import { Stage, useBoardView } from '../components/Stage.tsx';
 
 /**
  * The classroom TV / projector. Display only: it follows the teacher and has
@@ -24,6 +24,9 @@ export default function BoardDisplay() {
   const room = useClassroom(sessionId, { boardKey: params.get('k') ?? undefined });
   const [renderer, setRenderer] = useState<BoardRenderer | null>(null);
   const pg = usePageInfo(room.board, renderer);
+  const view = useBoardView(room.board);
+  // Slides fill the classroom screen; the 3D room is for the whiteboard.
+  const flat = view.mode !== 'board' || !can3d();
   const idle = useIdle(2500);
   useWakeLock(room.status === 'live');
   // The classroom screen shows anyone's shared screen (no sound: the teacher is in the room).
@@ -62,7 +65,12 @@ export default function BoardDisplay() {
           </motion.div>
         )}
       </AnimatePresence>
-      {pg.pages > 1 && <span className="board-page">{pg.page + 1} / {pg.pages}</span>}
+      {view.mode === 'board' && view.boards.length > 1 && (
+        <span className="board-page">
+          {Math.max(1, view.boards.indexOf(view.wb ?? -1) + 1)} / {view.boards.length}
+        </span>
+      )}
+      {view.mode === 'slides' && <span className="board-page board-page--slide">Slide {view.slides.indexOf(view.slide ?? -1) + 1} / {view.slides.length}</span>}
     </>
   );
 
@@ -85,17 +93,17 @@ export default function BoardDisplay() {
 
   return (
     <div className="stage3d stage3d--display">
-      {can3d() ? (
+      {!flat ? (
         <Suspense fallback={<div className="stage3d__loading" />}>
-          <Classroom3D view="display" board={room.board} people={room.people} teacherName={info?.teacherName ?? null} onRenderer={setRenderer}>
+          <Classroom3D view="display" students={roomStudents(info?.size, room.people)} board={room.board} people={room.people} teacherName={info?.teacherName ?? null} onRenderer={setRenderer}>
             {onBoard}
           </Classroom3D>
         </Suspense>
       ) : (
         <Environment variant="display">
-          <Board board={room.board} onRenderer={setRenderer}>
-            {onBoard}
-          </Board>
+          <div className="stagebox stagebox--tv">
+            <Stage board={room.board} view={view} overlay={onBoard} onRenderer={setRenderer} showFull={false} />
+          </div>
         </Environment>
       )}
       {title}

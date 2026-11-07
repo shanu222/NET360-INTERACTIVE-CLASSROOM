@@ -1,3 +1,4 @@
+import { classSize } from '@net360/protocol';
 import { lazy } from 'react';
 
 /** The 3D classroom loads separately, so sign-in and the board appear instantly. */
@@ -21,4 +22,11 @@ export function prefers3d(): boolean {
   if (!can3d()) return false;
   const portraitPhone = window.innerWidth < 700 && window.innerHeight > window.innerWidth;
   return !portraitPhone;
+}
+
+/** Seats the 3D room is set out for: the class size chosen, or more if more students came. */
+export function roomStudents(size: number | undefined, people: { seat: number }[]): number {
+  let seated = 0;
+  for (const p of people) seated = Math.max(seated, p.seat + 1);
+  return classSize(size, seated);
 }

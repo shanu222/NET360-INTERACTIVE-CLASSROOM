@@ -1,4 +1,4 @@
-import { BOARD_H, BOARD_W, pageStrokes, type Stroke } from '@net360/protocol';
+import { BOARD_H, BOARD_W, pageStrokes, type BoardState, type Stroke } from '@net360/protocol';
 import type { BoardSession } from './session.ts';
 import { drawStroke, slideInk } from './draw.ts';
 
@@ -62,6 +62,8 @@ export class BoardRenderer {
   private off: () => void;
   /** Page shown; null = follow the teacher's current page. */
   private viewPage: number | null = null;
+  /** Always show the page this picks (split screen: one half the slide, the other the whiteboard). */
+  private pin: ((s: BoardState) => number | null) | null = null;
   overlay: OverlayFn | null = null;
   onPageView?: (page: number, following: boolean) => void;
   /** Called after every redraw, saying which layer changed (the 3D classroom uploads only that). */
@@ -97,12 +99,23 @@ export class BoardRenderer {
   /** Page currently on screen. */
   get page() {
     const s = this.session.state;
+    if (this.pin) {
+      const p = this.pin(s);
+      if (p !== null && p >= 0 && p < s.pages) return p;
+    }
     return this.viewPage === null ? s.page : Math.min(this.viewPage, s.pages - 1);
   }
 
   /** Browse to a page (students) — `null` returns to following the teacher. */
   setViewPage(pg: number | null) {
     this.viewPage = pg === null || pg === this.session.state.page ? null : pg;
+    this.invalidate();
+    this.onPageView?.(this.page, this.viewPage === null);
+  }
+
+  /** Show the page `fn` picks from the board (null: back to following the live page). */
+  setPin(fn: ((s: BoardState) => number | null) | null) {
+    this.pin = fn;
     this.invalidate();
     this.onPageView?.(this.page, this.viewPage === null);
   }

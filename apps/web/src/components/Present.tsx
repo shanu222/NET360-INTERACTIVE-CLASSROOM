@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { BoardSession } from '@net360/board-engine';
-import type { ClientToServer, ServerToClient } from '@net360/protocol';
+import { boardView, type ClientToServer, type ServerToClient } from '@net360/protocol';
 import type { Socket } from 'socket.io-client';
 import type { ClassAudio } from '../lib/audio.ts';
 import { makeSlides, SLIDE_TYPES } from '../lib/slides.ts';
@@ -135,28 +135,30 @@ export function AddSlides({ upload, className = 'btn btn--ghost btn--sm' }: { up
   );
 }
 
-/** Previous / next slide for a student who is presenting (turns the class's page). */
+/** Previous / next slide for a student who is presenting (turns the class's slide). */
 export function SlideNav({ board }: { board: BoardSession }) {
   const [, tick] = useState(0);
   useEffect(() => {
-    const off = board.on(() => tick((n) => n + 1));
+    const off = board.on((k) => k !== 'live' && tick((n) => n + 1));
     return () => {
       off();
     };
   }, [board]);
-  const { page, pages } = board.state;
-  const go = (pg: number) => {
-    if (pg >= 0 && pg < pages) board.local({ t: 'pg', pg });
+  const v = boardView(board.state);
+  if (!v.slides.length) return null;
+  const i = v.slides.indexOf(v.slide ?? -1);
+  const go = (pg: number | undefined) => {
+    if (pg !== undefined) board.local({ t: 'pg', pg });
   };
   return (
     <span className="slidenav">
-      <button onClick={() => go(page - 1)} disabled={page <= 0} aria-label="Previous slide">
+      <button onClick={() => go(v.slides[i - 1])} disabled={i <= 0} aria-label="Previous slide">
         <Icon.prev />
       </button>
       <span>
-        {page + 1} / {pages}
+        {i + 1} / {v.slides.length}
       </span>
-      <button onClick={() => go(page + 1)} disabled={page >= pages - 1} aria-label="Next slide">
+      <button onClick={() => go(v.slides[i + 1])} disabled={i >= v.slides.length - 1} aria-label="Next slide">
         <Icon.next />
       </button>
     </span>

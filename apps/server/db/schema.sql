@@ -19,6 +19,12 @@ CREATE TABLE IF NOT EXISTS class_sessions (
 CREATE INDEX IF NOT EXISTS idx_sessions_live ON class_sessions (status, last_active);
 CREATE INDEX IF NOT EXISTS idx_sessions_teacher ON class_sessions (teacher_uid, started_at);
 
+-- Settings chosen when the class starts (expected number of students).
+CREATE TABLE IF NOT EXISTS session_settings (
+  session_id    TEXT PRIMARY KEY,               -- class_sessions.id (written alongside it)
+  size          INTEGER NOT NULL DEFAULT 40
+);
+
 -- Latest board state per lecture. Lets a class survive a server restart and keeps the
 -- notes after class. The board itself (gzip JSON) is in R2 at boards/<session_id>.json.gz
 -- when R2 is configured (location = 'r2'); otherwise inline here as base64 (location = 'd1').

@@ -1,5 +1,11 @@
 import {
   CanvasTexture,
+  Color,
+  Euler,
+  InstancedMesh,
+  Matrix4,
+  Quaternion,
+  Vector3 as V3,
   CapsuleGeometry,
   CylinderGeometry,
   Group,
@@ -219,9 +225,59 @@ function standing(uid: string): Group {
   return g;
 }
 
+/** Students nearer the front than this are drawn in full; the rest of a big class as one crowd. */
+const DETAILED_SEATS = 48;
+
+/**
+ * Students further back in a big class: every one drawn by a handful of shared
+ * meshes (one draw call per body part, however many students there are).
+ */
+class Crowd {
+  readonly group = new Group();
+  private parts: { mesh: InstancedMesh; local: Matrix4; color: 'clothes' | 'skin' | 'hair' }[] = [];
+  private key = '';
+
+  constructor(capacity: number) {
+    const part = (geo: THREE_Geo, color: 'clothes' | 'skin' | 'hair', pos: [number, number, number], rot: [number, number, number] = [0, 0, 0], scale: [number, number, number] = [1, 1, 1]) => {
+      const mesh = new InstancedMesh(geo, new MeshStandardMaterial({ color: '#ffffff', roughness: color === 'skin' ? 0.7 : 0.75 }), capacity);
+      mesh.count = 0;
+      mesh.frustumCulled = false;
+      const local = new Matrix4().compose(new V3(...pos), new Quaternion().setFromEuler(new Euler(...rot)), new V3(...scale));
+      this.parts.push({ mesh, local, color });
+      this.group.add(mesh);
+    };
+    part(G.torso, 'clothes', [0, 0.34, 0], [0, 0, 0], [1.12, 1, 0.72]);
+    part(G.head, 'skin', [0, 0.79, 0]);
+    part(G.hair, 'hair', [0, 0.805, 0.015], [0.42, 0, 0]);
+    part(G.arm, 'clothes', [-0.2, 0.36, -0.14], [1.15, 0, 0]);
+    part(G.arm, 'clothes', [0.2, 0.36, -0.14], [1.15, 0, 0]);
+  }
+
+  set(people: { uid: string; seat: Vector3 }[]) {
+    const key = people.map((p) => `${p.uid}@${p.seat.x},${p.seat.z}`).join('|');
+    if (key === this.key) return;
+    this.key = key;
+    const at = new Matrix4();
+    const m = new Matrix4();
+    const c = new Color();
+    for (const { mesh, local, color } of this.parts) {
+      people.forEach((p, i) => {
+        at.makeTranslation(p.seat.x, p.seat.y, p.seat.z);
+        mesh.setMatrixAt(i, m.multiplyMatrices(at, local));
+        mesh.setColorAt(i, c.set(look(p.uid)[color]));
+      });
+      mesh.count = people.length;
+      mesh.instanceMatrix.needsUpdate = true;
+      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    }
+  }
+}
+type THREE_Geo = (typeof G)[keyof typeof G];
+
 /**
  * Everyone in the room. Students take seats in join order; the teacher stands
- * at the front. Avatars are rebuilt only when someone's hand changes.
+ * at the front. Avatars are rebuilt only when someone's hand changes. In a big
+ * class the rows further back are one instanced crowd.
  */
 export class PeopleLayer {
   readonly group = new Group();
@@ -229,11 +285,17 @@ export class PeopleLayer {
   private teacher: Group | null = null;
   private teacherKey = '';
   showNames = false;
+  private crowd: Crowd | null = null;
 
   constructor(
     private seats: Vector3[],
     private teacherSpot: Vector3,
-  ) {}
+  ) {
+    if (seats.length > DETAILED_SEATS) {
+      this.crowd = new Crowd(seats.length);
+      this.group.add(this.crowd.group);
+    }
+  }
 
   setTeacher(name: string | null) {
     const key = name ?? '';
@@ -256,10 +318,16 @@ export class PeopleLayer {
 
   update(people: PersonInRoom[], hideUid?: string) {
     const keep = new Set<string>();
+    const crowd: { uid: string; seat: Vector3 }[] = [];
     for (const p of people) {
       if (p.uid === hideUid) continue;
       const seat = this.seats[p.seat % this.seats.length];
       if (!seat) continue;
+      // Further back in a big class: part of the crowd, unless their hand is up.
+      if (this.crowd && p.seat >= DETAILED_SEATS && !p.hand) {
+        crowd.push({ uid: p.uid, seat });
+        continue;
+      }
       keep.add(p.uid);
       const cur = this.avatars.get(p.uid);
       if (cur && cur.hand === p.hand && cur.name === p.name) continue;
@@ -281,6 +349,7 @@ export class PeopleLayer {
         this.avatars.delete(uid);
       }
     }
+    this.crowd?.set(crowd);
   }
 
   setShowNames(show: boolean) {

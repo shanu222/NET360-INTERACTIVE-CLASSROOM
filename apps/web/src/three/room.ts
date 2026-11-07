@@ -75,6 +75,35 @@ export async function prepareRoomArt(): Promise<void> {
 export const ROOM = { W: 14, D: 16, H: 4.6 };
 export const BOARD = { w: 5.6, h: 3.15, y: 1.15 + 3.15 / 2, z: 0.1 };
 
+/** Desks across and rows deep, and the room that holds them. */
+export interface Layout {
+  cols: number;
+  rows: number;
+  /** Desk centres across (front-row order: from the middle outwards). */
+  xs: number[];
+  /** Row positions (desk front edge), front to back. */
+  zs: number[];
+  W: number;
+  D: number;
+  H: number;
+}
+
+/** Desks for every class size: a classroom for 40, up to an auditorium for 500. */
+export function layoutFor(students: number): Layout {
+  const [cols, rows] = students <= 42 ? [6, 7] : students <= 64 ? [8, 8] : students <= 156 ? [12, 13] : students <= 304 ? [16, 19] : [20, 25];
+  // Pairs of desks 1.68 m apart; bigger rooms get a centre aisle and one every eight desks.
+  const aisle = cols >= 12 ? 1.1 : 0;
+  const half: number[] = [];
+  for (let k = 0; k < cols / 2; k++) half.push(0.84 + k * 1.68 + aisle / 2 + Math.floor(k / 4) * (cols >= 16 ? 0.9 : 0));
+  const xs = half.flatMap((x) => [-x, x]);
+  const pitch = 1.4;
+  const zs = Array.from({ length: rows }, (_, r) => 3.7 + r * pitch);
+  const W = Math.max(ROOM.W, 2 * (half[half.length - 1] + 2.3));
+  const D = Math.max(ROOM.D, zs[zs.length - 1] + 0.62 + 3.2);
+  const H = ROOM.H + Math.min(2, (D - ROOM.D) * 0.06);
+  return { cols, rows, xs, zs, W, D, H };
+}
+
 export interface Room {
   group: Group;
   /** The live board surface; its material map is replaced with the board texture. */
@@ -86,6 +115,8 @@ export interface Room {
   /** Moves the clock hands to now. */
   tickClock: () => void;
   sun: DirectionalLight;
+  /** Room size in metres (width, depth, height). */
+  dims: { W: number; D: number; H: number };
 }
 
 const std = (o: ConstructorParameters<typeof MeshStandardMaterial>[0]) => new MeshStandardMaterial(o);
@@ -116,19 +147,32 @@ function framed(art: Texture, w: number, h: number, frameColor: string, mat: boo
   return g;
 }
 
-export function buildRoom(opts: { shadows: boolean }): Room {
-  const { W, D, H } = ROOM;
+export function buildRoom(opts: { shadows: boolean; students?: number }): Room {
+  const lay = layoutFor(opts.students ?? 40);
+  const { W, D, H } = lay;
+  // Positions along the side walls were set for a 16 m room; spread them out in bigger ones.
+  const along = (z: number) => (z / ROOM.D) * D;
   const g = new Group();
 
   /* ---------- shell ---------- */
   const wallMat = std({ map: T.plaster('#efe6d6'), roughness: 0.95 });
-  const floor = new Mesh(new PlaneGeometry(W, D), std({ map: T.floorPlanks(), roughness: 0.62, metalness: 0.02 }));
+  // One plank tile is 2 m: a bigger room repeats it more (same picture, no new upload).
+  let planks = T.floorPlanks();
+  if (W !== ROOM.W || D !== ROOM.D) {
+    planks = planks.clone();
+    planks.repeat.set(W / 2, D / 2);
+  }
+  const floor = new Mesh(new PlaneGeometry(W, D), std({ map: planks, roughness: 0.62, metalness: 0.02 }));
   floor.rotation.x = -Math.PI / 2;
   floor.position.set(0, 0, D / 2);
   floor.receiveShadow = true;
   g.add(floor);
 
-  const ceiling = new Mesh(new PlaneGeometry(W, D), std({ color: '#f2ece2', roughness: 1 }));
+  // A high hall ceiling gets little light from below; let it glow a little so it stays pale.
+  const ceiling = new Mesh(
+    new PlaneGeometry(W, D),
+    std({ color: '#f2ece2', roughness: 1, ...(D > ROOM.D ? { emissive: '#d9cfbf', emissiveIntensity: 0.55 } : {}) }),
+  );
   ceiling.rotation.x = Math.PI / 2;
   ceiling.position.set(0, H, D / 2);
   g.add(ceiling);
@@ -171,7 +215,9 @@ export function buildRoom(opts: { shadows: boolean }): Room {
   const sky = T.windowSky();
   const glass = new MeshBasicMaterial({ map: sky, toneMapped: false });
   const frameMat = std({ color: '#f4efe6', roughness: 0.6 });
-  for (const z of [3.6, 8, 12.4]) {
+  const windows = Math.max(3, Math.round(D / 5.3));
+  for (let i = 0; i < windows; i++) {
+    const z = 3.6 + (i * (D - 7.2)) / (windows - 1);
     const win = new Group();
     const ww = 2.2, wh = 2.5, wy = 2.45;
     const pane = new Mesh(new PlaneGeometry(ww, wh), glass);
@@ -215,9 +261,9 @@ export function buildRoom(opts: { shadows: boolean }): Room {
 
   /* ---------- paintings on the right wall, with picture lights ---------- */
   const paintings: [Texture, number, number, number, number][] = [
-    [T.paintingLandscape(), 2.1, 1.4, 4.4, 2.55],
-    [T.paintingOrbits(), 1.25, 1.58, 9.3, 2.6],
-    [T.paintingSea(), 2.2, 1.32, 13.6, 2.55],
+    [T.paintingLandscape(), 2.1, 1.4, along(4.4), 2.55],
+    [T.paintingOrbits(), 1.25, 1.58, along(9.3), 2.6],
+    [T.paintingSea(), 2.2, 1.32, along(13.6), 2.55],
   ];
   const brass = std({ color: '#b08d57', roughness: 0.35, metalness: 0.8 });
   for (const [art, w, h, z, y] of paintings) {
@@ -264,7 +310,14 @@ export function buildRoom(opts: { shadows: boolean }): Room {
 
   /* ---------- quotations from scientists, between the windows and the paintings ---------- */
   // [quote, author, note] with where each hangs: [wall x, z]
-  const spots: [number, number][] = [[-W / 2 + 0.03, 5.8], [-W / 2 + 0.03, 10.2], [W / 2 - 0.03, 6.95], [W / 2 - 0.03, 11.25]];
+  // Left wall: between the first two windows and the last two.
+  const winZ = (i: number) => 3.6 + (i * (D - 7.2)) / (windows - 1);
+  const spots: [number, number][] = [
+    [-W / 2 + 0.03, (winZ(0) + winZ(1)) / 2],
+    [-W / 2 + 0.03, (winZ(windows - 2) + winZ(windows - 1)) / 2],
+    [W / 2 - 0.03, along(6.95)],
+    [W / 2 - 0.03, along(11.25)],
+  ];
   const quotes = QUOTES.map(([q, a, n], i) => [q, a, n, spots[i][0], spots[i][1]] as const);
   for (const [q, a, n, x, z] of quotes) {
     const f = framed(T.quotePlate(q, a, n), 1.85, 1.27, '#c9a24a', false, 0.85);
@@ -297,7 +350,7 @@ export function buildRoom(opts: { shadows: boolean }): Room {
   tickClock();
 
   /* ---------- plants ---------- */
-  for (const [x, z, s] of [[-6.2, 0.7, 1.15], [6.2, 0.7, 1.15], [-6.2, D - 0.8, 1], [6.3, 6.9, 0.9]] as const) {
+  for (const [x, z, s] of [[-W / 2 + 0.8, 0.7, 1.15], [W / 2 - 0.8, 0.7, 1.15], [-W / 2 + 0.8, D - 0.8, 1], [W / 2 - 0.7, along(6.9), 0.9]] as const) {
     g.add(plant(x, z, s));
   }
 
@@ -318,8 +371,8 @@ export function buildRoom(opts: { shadows: boolean }): Room {
 
   /* ---------- student desks and chairs (instanced: one draw call each) ---------- */
   // First come, first seated: front row first, filling from the centre outwards.
-  const cols = [-0.84, 0.84, -2.52, 2.52, -4.2, 4.2];
-  const rows = [3.7, 5.1, 6.5, 7.9, 9.3, 10.7, 12.1];
+  const cols = lay.xs;
+  const rows = lay.zs;
   const seats: Vector3[] = [];
   for (const z of rows) for (const x of cols) seats.push(new Vector3(x, 0.47, z + 0.62));
   const n = seats.length;
@@ -344,7 +397,7 @@ export function buildRoom(opts: { shadows: boolean }): Room {
       place(i, m4);
       inst.setMatrixAt(i, m4);
     }
-    inst.castShadow = true;
+    inst.castShadow = n <= 64;
     inst.receiveShadow = true;
     g.add(inst);
   }
@@ -358,34 +411,45 @@ export function buildRoom(opts: { shadows: boolean }): Room {
   g.add(sun, sun.target);
   if (opts.shadows) {
     sun.castShadow = true;
-    sun.shadow.mapSize.set(1024, 1024);
+    const reach = Math.max(10, W / 2 + 1, D / 2 + 1);
+    sun.shadow.mapSize.set(reach > 12 ? 2048 : 1024, reach > 12 ? 2048 : 1024);
     const c = sun.shadow.camera;
-    c.left = -10;
-    c.right = 10;
-    c.top = 10;
-    c.bottom = -10;
+    c.left = -reach;
+    c.right = reach;
+    c.top = reach;
+    c.bottom = -reach;
     c.near = 1;
-    c.far = 30;
+    c.far = 30 + reach * 2;
+    sun.position.set(-9 - (W - ROOM.W) / 2, 7 + (H - ROOM.H), 6 + (D - ROOM.D) / 2);
+    sun.target.position.set(1, 0, D / 2 - 1);
     sun.shadow.bias = -0.0006;
     sun.shadow.normalBias = 0.02;
   }
   // recessed ceiling panels (they glow; two warm fills do the lighting)
   const glow = new MeshBasicMaterial({ color: new Color('#fff6e6'), toneMapped: false });
-  for (const x of [-3.6, 0, 3.6]) {
-    for (const z of [3.5, 8, 12.5]) {
+  const px = Math.max(1, Math.round(W / 9));
+  const pz = Math.max(3, Math.round(D / 4.6));
+  for (let ix = -px; ix <= px; ix++) {
+    const x = ix * 3.6;
+    if (Math.abs(x) > W / 2 - 1.2) continue;
+    for (let iz = 0; iz < pz; iz++) {
+      const z = 3.5 + (iz * (D - 7)) / (pz - 1);
       const p = new Mesh(new PlaneGeometry(1.3, 1.3), glow);
       p.rotation.x = Math.PI / 2;
       p.position.set(x, H - 0.01, z);
       g.add(p);
     }
   }
-  for (const z of [4, 11]) {
-    const l = new PointLight('#ffeacc', 7, 14, 1.6);
+  // Two warm fills; in a big hall they reach further (the number of lights stays the same).
+  const big = D / ROOM.D;
+  for (const z of [4 * big, 11 * big]) {
+    const l = new PointLight('#ffeacc', 7 * Math.min(2.2, big * big), 14 * big, 1.6);
     l.position.set(0, H - 0.4, z);
     g.add(l);
   }
+  if (big > 1) hemi.intensity = 1.45 + Math.min(0.5, (big - 1) * 0.35);
 
-  return { group: g, board, seats, teacherSpot: new Vector3(-3.55, 0, 1.35), tickClock, sun };
+  return { group: g, board, seats, teacherSpot: new Vector3(-3.55, 0, 1.35), tickClock, sun, dims: { W, D, H } };
 }
 
 /* ---------- furniture helpers ---------- */

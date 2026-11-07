@@ -5,9 +5,9 @@ import type { BoardRenderer } from '@net360/board-engine';
 import { useClassroom } from '../lib/classroom.ts';
 import { useIdle, usePageInfo } from '../lib/hooks.ts';
 import { saveNotesPdf } from '../lib/notes.ts';
-import { Classroom3D, can3d, prefers3d } from '../lib/webgl.ts';
+import { Classroom3D, can3d, prefers3d, roomStudents } from '../lib/webgl.ts';
 import { Environment } from '../components/Environment.tsx';
-import { Board } from '../components/Board.tsx';
+import { Stage, useBoardView } from '../components/Stage.tsx';
 import { Icon } from '../components/Icons.tsx';
 import type { ZoomCommand } from '../three/Classroom3D.tsx';
 import { codeFor, guestKey, lastName } from '../lib/code.ts';
@@ -110,7 +110,29 @@ export default function Student() {
   const teacherUid = room.chats.find((m) => m.from !== me)?.from ?? room.chats.find((m) => m.from === me && m.to)?.to ?? '';
   const [pop, setPop] = useState<ChatMessage | null>(null);
   useIncoming(room.chats, me, (m) => !chatOpen && setPop(m));
-  const [in3d, setIn3d] = useState(prefers3d);
+  const view = useBoardView(room.board);
+  // Slides come up large: from the classroom, a presentation switches to the flat board,
+  // and back to the classroom when the teacher returns to the whiteboard.
+  const [in3d, setIn3d] = useState(() => prefers3d() && view.mode === 'board');
+  const autoFlat = useRef(false);
+  const lastMode = useRef(view.mode);
+  useEffect(() => {
+    const was = lastMode.current;
+    lastMode.current = view.mode;
+    if (was === view.mode) return;
+    if (view.mode !== 'board' && in3d) {
+      autoFlat.current = true;
+      setIn3d(false);
+    } else if (view.mode === 'board' && autoFlat.current) {
+      autoFlat.current = false;
+      setIn3d(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view.mode]);
+  const toggle3d = () => {
+    autoFlat.current = false;
+    setIn3d((v) => !v);
+  };
   // 0 = from my desk, 1 = the board fills the screen
   const [zoomCmd, setZoomCmd] = useState<ZoomCommand>({ t: 0, n: 0 });
   const [atBoard, setAtBoard] = useState(false);
@@ -213,7 +235,7 @@ export default function Student() {
           </span>
         )}
         {can3d() && (
-          <button className="topline__btn" onClick={() => setIn3d((v) => !v)} aria-label={in3d ? 'Show the board only' : 'Show the classroom'} title={in3d ? 'Board only' : 'Classroom view'}>
+          <button className="topline__btn" onClick={toggle3d} aria-label={in3d ? 'Show the board only' : 'Show the classroom'} title={in3d ? 'Board only' : 'Classroom view'}>
             {in3d ? <Icon.board /> : <Icon.cube />}
           </button>
         )}
@@ -234,7 +256,7 @@ export default function Student() {
                   <button
                     onClick={() => {
                       setMenu(false);
-                      setIn3d((v) => !v);
+                      toggle3d();
                     }}
                   >
                     {in3d ? <Icon.board /> : <Icon.cube />} {in3d ? 'Board only' : 'Classroom view'}
@@ -444,6 +466,7 @@ export default function Student() {
           >
             <Classroom3D
               view="student"
+              students={roomStudents(info?.size, room.people)}
               board={room.board}
               people={room.people}
               teacherName={info?.teacherName ?? null}
@@ -473,9 +496,9 @@ export default function Student() {
 
   return (
     <Environment variant="full" entering={entering}>
-      <Board board={room.board} onRenderer={setRenderer}>
-        {onBoard}
-      </Board>
+      <div className="stagebox">
+        <Stage board={room.board} view={view} browse onRenderer={setRenderer} />
+      </div>
       {!hideHint && (
         <button className="rotate-hint" onClick={() => setHideHint(true)}>
           <Icon.rotate /> Turn your phone sideways for a bigger board
@@ -489,6 +512,7 @@ export default function Student() {
 /** Turn server messages into wording students understand. */
 export function friendly(msg: string | null, who: 'student' | 'teacher' = 'student'): string {
   if (!msg) return 'Please try again in a moment.';
+  if (/class is full/i.test(msg)) return 'This class is full. Ask your teacher to start a bigger class.';
   if (/wrong class code|class code/i.test(msg)) return 'That code doesn’t match this class. Use the code your teacher shared.';
   if (/your name|join again/i.test(msg)) return 'Please enter your name and the class code again.';
   // Students never sign in; this only appears while the classroom server is updating.

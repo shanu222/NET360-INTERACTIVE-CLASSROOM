@@ -34,7 +34,10 @@ export default function Classroom3D({
   onRenderer,
   children,
   className = '',
+  students = 40,
 }: {
+  /** How many students the room is set out for (40 … 500). */
+  students?: number;
   view: View;
   board?: BoardSession | null;
   people?: PersonInRoom[];
@@ -71,7 +74,7 @@ export default function Classroom3D({
       .then(() => prepareRoomArt())
       .then(() => {
       if (cancelled || !hostRef.current) return;
-      sc = new ClassroomScene(hostRef.current, view);
+      sc = new ClassroomScene(hostRef.current, view, students);
       sc.onBoardRect = setRect;
       sc.onZoom = (t) => cbs.current.onZoom?.(t);
       setScene(sc);
@@ -81,7 +84,7 @@ export default function Classroom3D({
       sc?.dispose();
       setScene(null);
     };
-  }, [view]);
+  }, [view, students]);
 
   // The live board, drawn off-screen at texture size and copied into the room.
   useEffect(() => {

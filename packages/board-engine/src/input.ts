@@ -11,6 +11,12 @@ export interface PenSettings {
 
 type UndoEntry = { kind: 'add' | 'hide'; ids: string[] };
 
+/** Undo history; two pens writing on the halves of a split screen share one. */
+export class PenHistory {
+  undo: UndoEntry[] = [];
+  redo: UndoEntry[] = [];
+}
+
 const newId = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 
 /** Points are flushed to the network every frame (~16 ms) or every 8 points. */
@@ -39,8 +45,13 @@ export class PenInput {
   private penSeenAt = 0;
   private flushRaf = 0;
   private cursor: [number, number] | null = null;
-  private undoStack: UndoEntry[] = [];
-  private redoStack: UndoEntry[] = [];
+  private hist: PenHistory;
+  private get undoStack() {
+    return this.hist.undo;
+  }
+  private get redoStack() {
+    return this.hist.redo;
+  }
   onHistory?: (canUndo: boolean, canRedo: boolean) => void;
 
   constructor(
@@ -49,8 +60,9 @@ export class PenInput {
     private renderer: BoardRenderer,
     private settings: () => PenSettings,
     /** Map a screen point to board units — e.g. through the 3D classroom's board. */
-    private opts: { map?: (clientX: number, clientY: number) => [number, number] } = {},
+    private opts: { map?: (clientX: number, clientY: number) => [number, number]; history?: PenHistory } = {},
   ) {
+    this.hist = opts.history ?? new PenHistory();
     el.addEventListener('pointerdown', this.down);
     el.addEventListener('pointermove', this.move);
     el.addEventListener('pointerup', this.up);
@@ -101,7 +113,7 @@ export class PenInput {
   private push(e: UndoEntry) {
     this.undoStack.push(e);
     if (this.undoStack.length > 200) this.undoStack.shift();
-    this.redoStack = [];
+    this.redoStack.length = 0;
     this.emitHistory();
   }
 

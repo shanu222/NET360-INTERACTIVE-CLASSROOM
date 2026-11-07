@@ -55,7 +55,17 @@ export interface PageGo { t: 'pg'; pg: number }
  */
 export interface SlidesAdd { t: 'sl'; imgs: string[] }
 
-export type BoardEventBody = StrokeStart | StrokePoints | StrokeEnd | StrokeHide | StrokeShow | PageNew | PageGo | SlidesAdd;
+/**
+ * What the class is looking at:
+ *  - board  — the whiteboard (pages without a slide)
+ *  - slides — the presentation (pages with a slide), written on directly
+ *  - split  — the current slide and the whiteboard side by side
+ */
+export type BoardMode = 'board' | 'slides' | 'split';
+export const BOARD_MODES: BoardMode[] = ['board', 'slides', 'split'];
+export interface ModeSet { t: 'md'; m: BoardMode }
+
+export type BoardEventBody = StrokeStart | StrokePoints | StrokeEnd | StrokeHide | StrokeShow | PageNew | PageGo | SlidesAdd | ModeSet;
 
 /** A slide image reference: `<sessionId>/<id>.jpg`. */
 export const SLIDE_RE = /^[A-Za-z0-9_-]{6,40}\/[A-Za-z0-9_-]{6,40}\.jpg$/;
@@ -97,10 +107,61 @@ export interface BoardState {
   strokes: Record<string, Stroke>;
   /** Slide shown behind a page's writing (page → image). Missing on older saved boards. */
   bg?: Record<number, string>;
+  /** What the class is looking at (missing on older boards: worked out from `page`). */
+  mode?: BoardMode;
+  /** The current slide page (slides / split). */
+  slide?: number;
+  /** The current whiteboard page (board / split). */
+  wb?: number;
 }
 
 export function emptyBoard(): BoardState {
-  return { seq: 0, pages: 1, page: 0, order: [], strokes: {}, bg: {} };
+  return { seq: 0, pages: 1, page: 0, order: [], strokes: {}, bg: {}, mode: 'board', slide: -1, wb: 0 };
+}
+
+export const isSlidePage = (s: BoardState, pg: number) => Boolean(s.bg?.[pg]);
+
+/** The board as the class sees it: which mode, and which slide and whiteboard page are up. */
+export interface BoardView {
+  mode: BoardMode;
+  /** Current slide page, or null when there are no slides. */
+  slide: number | null;
+  /** Current whiteboard page, or null when every page is a slide. */
+  wb: number | null;
+  /** All slide pages, in order. */
+  slides: number[];
+  /** All whiteboard pages, in order. */
+  boards: number[];
+}
+
+export function boardView(s: BoardState): BoardView {
+  const slides: number[] = [];
+  const boards: number[] = [];
+  for (let p = 0; p < s.pages; p++) (isSlidePage(s, p) ? slides : boards).push(p);
+  const slide =
+    s.slide !== undefined && s.slide >= 0 && isSlidePage(s, s.slide) && s.slide < s.pages
+      ? s.slide
+      : isSlidePage(s, s.page)
+        ? s.page
+        : (slides[0] ?? null);
+  const wb =
+    s.wb !== undefined && s.wb >= 0 && s.wb < s.pages && !isSlidePage(s, s.wb)
+      ? s.wb
+      : !isSlidePage(s, s.page)
+        ? s.page
+        : (boards[0] ?? null);
+  let mode: BoardMode = s.mode ?? (isSlidePage(s, s.page) ? 'slides' : 'board');
+  if (mode !== 'board' && slide === null) mode = 'board';
+  if (mode === 'split' && wb === null) mode = 'slides';
+  if (mode === 'board' && wb === null) mode = 'slides';
+  return { mode, slide, wb, slides, boards };
+}
+
+/** Add a whiteboard page at the end and make it current. */
+function addBoardPage(s: BoardState) {
+  s.pages += 1;
+  s.wb = s.pages - 1;
+  return s.wb;
 }
 
 /** Result of applying an event: which pages changed and whether only a live stroke grew. */
@@ -169,15 +230,34 @@ export function applyEvent(s: BoardState, ev: BoardEventBody & { seq?: number })
       }
       return { structural: changed };
     }
-    case 'pn':
-      s.pages += 1;
-      s.page = s.pages - 1;
+    case 'pn': {
+      // A new whiteboard page. From the slides, this switches to the whiteboard.
+      const v = boardView(s);
+      s.page = addBoardPage(s);
+      s.slide = v.slide ?? -1;
+      s.mode = v.mode === 'split' ? 'split' : 'board';
       return { structural: true };
-    case 'pg':
-      if (ev.pg >= 0 && ev.pg < s.pages) s.page = ev.pg;
+    }
+    case 'pg': {
+      if (!(ev.pg >= 0 && ev.pg < s.pages)) return { structural: false };
+      const v = boardView(s);
+      s.page = ev.pg;
+      s.slide = v.slide ?? -1;
+      s.wb = v.wb ?? -1;
+      // Going to a slide shows the slides; going to a whiteboard page shows the board.
+      // Side by side, each half keeps its own page.
+      if (isSlidePage(s, ev.pg)) {
+        s.slide = ev.pg;
+        s.mode = v.mode === 'split' ? 'split' : 'slides';
+      } else {
+        s.wb = ev.pg;
+        s.mode = v.mode === 'split' ? 'split' : 'board';
+      }
       return { structural: true };
+    }
     case 'sl': {
       if (!ev.imgs.length) return { structural: false };
+      const v = boardView(s);
       const bg = (s.bg ??= {});
       // A completely blank board starts the deck on page 1; otherwise slides go after.
       const blank = s.pages === 1 && !s.order.some((id) => !s.strokes[id]?.hidden) && !bg[0];
@@ -185,6 +265,25 @@ export function applyEvent(s: BoardState, ev: BoardEventBody & { seq?: number })
       ev.imgs.forEach((img, i) => (bg[first + i] = img));
       s.pages = first + ev.imgs.length;
       s.page = first;
+      s.slide = first;
+      s.wb = blank ? -1 : (v.wb ?? -1);
+      // New slides come straight up for everyone.
+      s.mode = v.mode === 'split' && !blank ? 'split' : 'slides';
+      return { structural: true };
+    }
+    case 'md': {
+      const v = boardView(s);
+      if (!BOARD_MODES.includes(ev.m) || ev.m === v.mode) return { structural: false };
+      if (ev.m !== 'board' && v.slide === null) return { structural: false }; // no slides yet
+      const wb = ev.m !== 'slides' && v.wb === null ? addBoardPage(s) : v.wb;
+      s.slide = v.slide ?? -1;
+      s.wb = wb ?? -1;
+      s.mode = ev.m;
+      // The pen writes on what is in front: the whiteboard, the slide — side by side,
+      // wherever it was last.
+      if (ev.m === 'board') s.page = wb!;
+      else if (ev.m === 'slides') s.page = v.slide!;
+      else if (s.page !== v.slide && s.page !== wb) s.page = wb!;
       return { structural: true };
     }
   }
@@ -216,6 +315,18 @@ export interface SessionInfo {
   topic: string;
   teacherName: string;
   startedAt: number;
+  /** How many students the teacher expects (sets the size of the classroom). */
+  size?: number;
+}
+
+/** Class sizes a teacher can choose when starting a class. */
+export const CLASS_SIZES = [40, 60, 150, 300, 500] as const;
+/** Most students one class can hold. */
+export const MAX_CLASS = 500;
+/** The class size to plan for: the teacher's choice, or more if more have come. */
+export function classSize(chosen: number | undefined, seated = 0): number {
+  const want = Math.max(chosen ?? CLASS_SIZES[0], seated);
+  return CLASS_SIZES.find((n) => n >= want) ?? MAX_CLASS;
 }
 
 export interface ClassState {

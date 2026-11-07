@@ -1,5 +1,8 @@
 import {
   ACESFilmicToneMapping,
+  BoxGeometry,
+  Group,
+  MeshStandardMaterial,
   Mesh,
   PlaneGeometry,
   Plane,
@@ -54,7 +57,7 @@ export function isSmallDevice() {
 export class ClassroomScene {
   readonly renderer: WebGLRenderer;
   private scene = new Scene();
-  private camera = new PerspectiveCamera(38, 1, 0.1, 60);
+  private camera = new PerspectiveCamera(38, 1, 0.1, 120);
   private room: Room;
   private people: PeopleLayer;
   /** Ink sits on two transparent layers over the slate: finished strokes and strokes in progress. */
@@ -105,6 +108,8 @@ export class ClassroomScene {
   constructor(
     private host: HTMLElement,
     private view: View,
+    /** Students the room is set out for (40 … 500). */
+    students = 40,
   ) {
     const small = isSmallDevice();
     // Background-only views (sign-in, the teacher's small class view) render lighter.
@@ -123,7 +128,8 @@ export class ClassroomScene {
     host.appendChild(this.renderer.domElement);
 
     this.scene.background = new Color('#2a2119');
-    this.room = buildRoom({ shadows: !small && !light });
+    // Big halls skip shadows on phones and in the small views; everywhere else they stay.
+    this.room = buildRoom({ shadows: !small && !light, students });
     this.scene.add(this.room.group);
     this.people = new PeopleLayer(this.room.seats, this.room.teacherSpot);
     this.scene.add(this.people.group);
@@ -147,6 +153,30 @@ export class ClassroomScene {
     };
     this.inkCommitted = layer(0.002);
     this.inkLive = layer(0.004);
+
+    // A lecture hall also shows the board on two screens either side, so the back rows can read it.
+    // They share the board's materials: whatever is written appears on all three.
+    if (this.room.dims.W >= 22) {
+      const sw = BOARD.w * 0.86;
+      const sh = BOARD.h * 0.86;
+      const frameMat = new MeshStandardMaterial({ color: '#1c1b1d', roughness: 0.4, metalness: 0.3 });
+      for (const side of [-1, 1]) {
+        const g = new Group();
+        g.add(new Mesh(new BoxGeometry(sw + 0.18, sh + 0.18, 0.06), frameMat));
+        const face = (mat: MeshBasicMaterial, z: number) => {
+          const m = new Mesh(new PlaneGeometry(sw, sh), mat);
+          m.position.z = z;
+          m.renderOrder = 2;
+          g.add(m);
+        };
+        face(boardMat, 0.032);
+        face(this.inkCommitted.material as MeshBasicMaterial, 0.034);
+        face(this.inkLive.material as MeshBasicMaterial, 0.036);
+        g.position.set(side * (4.85 + 1.2 + sw / 2), BOARD.y + 0.3, 0.08);
+        g.rotation.y = -side * 0.16;
+        this.scene.add(g);
+      }
+    }
 
     this.ro = new ResizeObserver(() => this.resize());
     this.ro.observe(host);
@@ -284,9 +314,12 @@ export class ClassroomScene {
         break;
       }
       case 'classview': {
+        // From above the board, looking down over every desk (higher in a big hall).
+        const { D } = this.room.dims;
+        const grow = Math.max(0, D - 16);
         cam.fov = aspect < 1.2 ? 64 : 52;
-        this.base.pos.set(0, 3.1, 0.9);
-        this.base.target.set(0, 0.6, 9.5);
+        this.base.pos.set(0, 3.1 + grow * 0.22, 0.9);
+        this.base.target.set(0, 0.6, 9.5 + grow * 0.55);
         break;
       }
       case 'lobby': {
@@ -409,8 +442,9 @@ export class ClassroomScene {
   }
 
   private clampWalk(v: Vector3) {
-    v.x = Math.max(-6.3, Math.min(6.3, v.x));
-    v.z = Math.max(1.0, Math.min(15.3, v.z));
+    const { W, D } = this.room.dims;
+    v.x = Math.max(-W / 2 + 0.7, Math.min(W / 2 - 0.7, v.x));
+    v.z = Math.max(1.0, Math.min(D - 0.7, v.z));
     return v;
   }
 

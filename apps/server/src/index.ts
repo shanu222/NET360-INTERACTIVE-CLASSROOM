@@ -26,7 +26,7 @@ import { mayTeach, userFromRequest, verifyUser } from './auth.ts';
 import { store, type Session } from './store.ts';
 import { mediaParticipants, mediaToken, setAllow } from './media.ts';
 import { loadSlide, saveSlide } from './slides.ts';
-import { MAX_SLIDES, SLIDE_RE } from '@net360/protocol';
+import { BOARD_MODES, CLASS_SIZES, MAX_CLASS, MAX_SLIDES, SLIDE_RE } from '@net360/protocol';
 import { migrate } from './db.ts';
 import { flushAll, persist, restoreLiveSessions, startSnapshots } from './persist.ts';
 import { padKeyFor } from './passes.ts';
@@ -99,7 +99,9 @@ app.post('/api/sessions', async (req, res) => {
   if (!mayTeach(user)) return res.status(403).json({ error: 'This account is not set up as a teacher.' });
   const subject = String(req.body?.subject ?? 'Physics').slice(0, 60);
   const topic = String(req.body?.topic ?? '').slice(0, 120);
-  const s = store.create(user, subject, topic);
+  const asked = Number(req.body?.size);
+  const size = (CLASS_SIZES as readonly number[]).includes(asked) ? asked : CLASS_SIZES[0];
+  const s = store.create(user, subject, topic, size);
   persist.sessionCreated(s);
   res.json({ session: s.info, boardKey: s.boardKey, padKey: padKeyFor(s.boardKey) });
 });
@@ -189,6 +191,8 @@ function validEvent(ev: any): ev is BoardEventBody {
       return Number.isInteger(ev.pg);
     case 'sl':
       return Array.isArray(ev.imgs) && ev.imgs.length >= 1 && ev.imgs.length <= MAX_SLIDES && ev.imgs.every((i: unknown) => typeof i === 'string' && SLIDE_RE.test(i));
+    case 'md':
+      return BOARD_MODES.includes(ev.m);
     default:
       return false;
   }
@@ -209,9 +213,45 @@ function peopleList(s: Session): PersonPublic[] {
 /** Presence changed: update counts, the teacher's roster and everyone's room. */
 function pushPresence(s: Session) {
   s.cls.present = [...s.roster.values()].filter((r) => r.online).length;
+  // In a big class many students join at once: send everyone one update for a
+  // burst of joins instead of one per student.
+  if (s.cls.present <= 60) return flushPresence(s);
+  if (presenceDue.has(s.info.id)) return;
+  presenceDue.set(
+    s.info.id,
+    setTimeout(() => {
+      presenceDue.delete(s.info.id);
+      flushPresence(s);
+    }, 400),
+  );
+}
+const presenceDue = new Map<string, NodeJS.Timeout>();
+function flushPresence(s: Session) {
+  const due = presenceDue.get(s.info.id);
+  if (due) clearTimeout(due);
+  presenceDue.delete(s.info.id);
+  s.cls.present = [...s.roster.values()].filter((r) => r.online).length;
   io.to(room(s)).emit('cls', s.cls);
   io.to(teacherRoom(s)).emit('roster', rosterList(s));
   io.to(room(s)).emit('people', peopleList(s));
+}
+
+/** No room for one more student (anyone who has been in this class may always come back). */
+function classFull(s: Session, uid: string) {
+  if (s.roster.has(uid)) return false;
+  let online = 0;
+  for (const r of s.roster.values()) if (r.online) online++;
+  return online >= MAX_CLASS;
+}
+
+/** The front-most seat no one in class is sitting in (a returning student keeps theirs if free). */
+function seatFor(s: Session, uid: string, had?: number) {
+  const taken = new Set<number>();
+  for (const r of s.roster.values()) if (r.online && r.uid !== uid) taken.add(r.seat);
+  if (had !== undefined && !taken.has(had)) return had;
+  let seat = 0;
+  while (taken.has(seat)) seat++;
+  return seat;
 }
 
 /** Who may speak, as every screen sees it. */
@@ -251,6 +291,7 @@ function pushPresent(s: Session) {
 
 /** A hand went up or down. */
 function pushHands(s: Session) {
+  if (s.cls.present > 60) return pushPresence(s);
   io.to(teacherRoom(s)).emit('roster', rosterList(s));
   io.to(room(s)).emit('people', peopleList(s));
 }
@@ -295,6 +336,7 @@ io.use(async (socket, next) => {
     if (key.length < 16 || key.length > 64) return next(new Error('Please join again.'));
     if (name.length < 2) return next(new Error('Please enter your name.'));
     const uid = `g:${createHash('sha256').update(`${s.info.id}:${key}`).digest('base64url').slice(0, 22)}`;
+    if (classFull(s, uid)) return next(new Error('This class is full.'));
     Object.assign(data, { role: 'student', uid, name });
     return next();
   }
@@ -307,6 +349,7 @@ io.use(async (socket, next) => {
   }
   // The teacher's account opened from a student screen joins as a separate student.
   const uid = user.uid === s.teacherUid && !isTeacher ? `${user.uid}#student` : user.uid;
+  if (!isTeacher && classFull(s, uid)) return next(new Error('This class is full.'));
   Object.assign(data, { role: isTeacher ? 'teacher' : 'student', uid, name: user.name });
   next();
 });
@@ -324,11 +367,12 @@ io.on('connection', (socket: Socket<ClientToServer, ServerToClient>) => {
   if (role === 'student') {
     const r = s.roster.get(uid);
     if (r) {
+      if (!r.online) r.seat = seatFor(s, uid, r.seat);
       r.online = true;
       r.sockets++;
       r.name = name; // a student may fix their name when rejoining
     } else {
-      s.roster.set(uid, { uid, name, online: true, hand: false, joinedAt: Date.now(), seat: s.roster.size, sockets: 1 });
+      s.roster.set(uid, { uid, name, online: true, hand: false, joinedAt: Date.now(), seat: seatFor(s, uid), sockets: 1 });
     }
   }
   if (role !== 'board') persist.joined(s, uid, name, role);
@@ -458,7 +502,7 @@ io.on('connection', (socket: Socket<ClientToServer, ServerToClient>) => {
   socket.on('b', (body) => {
     if (s.ended || !validEvent(body)) return;
     // The teacher writes; a student who is presenting may add slides and turn pages.
-    const presenter = role === 'student' && s.present.uid === uid && (body.t === 'pg' || body.t === 'pn' || body.t === 'sl');
+    const presenter = role === 'student' && s.present.uid === uid && (body.t === 'pg' || body.t === 'pn' || body.t === 'sl' || body.t === 'md');
     if (!canWrite && !presenter) return;
     if (body.t === 'sl' && !body.imgs.every((i) => i.startsWith(`${s.info.id}/`))) return;
     const ev = { ...body, seq: s.board.seq + 1, o: clientId, at: Date.now() } as BoardEvent;

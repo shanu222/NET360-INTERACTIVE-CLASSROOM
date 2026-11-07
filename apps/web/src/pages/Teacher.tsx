@@ -1,20 +1,20 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { INK, PenInput, type BoardRenderer, type PenSettings } from '@net360/board-engine';
+import { INK, type BoardRenderer, type PenInput, type PenSettings } from '@net360/board-engine';
 import { useAuth } from '../lib/auth.tsx';
 import { useClassroom } from '../lib/classroom.ts';
-import { usePageInfo } from '../lib/hooks.ts';
 import { api, boardUrl, joinUrl, padUrl } from '../lib/api.ts';
 import { saveNotesPdf } from '../lib/notes.ts';
 import { Environment } from '../components/Environment.tsx';
-import { Board } from '../components/Board.tsx';
+import { ModeBar, Stage, useBoardView } from '../components/Stage.tsx';
+import { SLIDE_TYPES } from '../lib/slides.ts';
 import { PenDock } from '../components/PenDock.tsx';
 import { SignIn } from '../components/SignIn.tsx';
 import { Code, QR } from '../components/QR.tsx';
 import { Icon } from '../components/Icons.tsx';
 import { StatusPill, friendly } from './Student.tsx';
-import { Classroom3D, can3d } from '../lib/webgl.ts';
+import { Classroom3D, can3d, prefers3d, roomStudents } from '../lib/webgl.ts';
 import { Lobby } from '../components/Lobby.tsx';
 import { ChatPop, ChatThread, useIncoming, useUnread } from '../components/Chat.tsx';
 import { useClassAudio } from '../lib/audio.ts';
@@ -39,8 +39,8 @@ export default function Teacher() {
   // Pen tablet detection: browsers report a tablet stylus as pointerType "pen".
   const [tablet, setTablet] = useState({ seen: false, pressure: false });
   const room = useClassroom(sessionId, { enabled: Boolean(user), as: 'teacher' });
-  const [renderer, setRenderer] = useState<BoardRenderer | null>(null);
-  const pg = usePageInfo(room.board, renderer);
+  const [, setRenderer] = useState<BoardRenderer | null>(null);
+  const view = useBoardView(room.board);
   const [pen, setPen] = useState<PenSettings>({ tool: 'pen', color: INK.chalk, width: 4.4 });
   const penRef = useRef(pen);
   penRef.current = pen;
@@ -60,7 +60,7 @@ export default function Teacher() {
   // The student whose conversation is open in the Chat panel.
   const [thread, setThread] = useState<string | null>(null);
   // 'room': the 3D classroom, writing straight onto its board · 'board': the large flat board
-  const [mode, setMode] = useState<'room' | 'board'>(() => (can3d() ? 'room' : 'board'));
+  const [mode, setMode] = useState<'room' | 'board'>(() => (prefers3d() ? 'room' : 'board'));
   // Walking around the 3D classroom (writing pauses while walking).
   const [walking, setWalking] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -92,39 +92,40 @@ export default function Teacher() {
     };
   }, []);
 
-  // Attach pen input once the board is up and we are confirmed as the teacher.
   const canWrite = room.welcome?.canWrite ?? false;
+  // Writing: the rail and page bar fade while the pen is down.
+  const penUp = useRef(0);
+  const penDown = () => {
+    clearTimeout(penUp.current);
+    setWriting(true);
+    setPanel(null);
+  };
   useEffect(() => {
-    if (!renderer || !canWrite || mode !== 'board') return;
-    // Right after switching from the 3D room, the 3D board's renderer may still be
-    // current for a moment; wait for the flat board's own renderer.
-    const host = renderer.live.parentElement;
-    if (!host || !host.isConnected) return;
-    const pi = new PenInput(host, room.board, renderer, () => penRef.current);
-    pi.onHistory = (u, r) => setHist({ undo: u, redo: r });
-    setInput(pi);
-    let t = 0;
-    const down = () => {
-      clearTimeout(t);
-      setWriting(true);
-      setPanel(null);
-    };
     const up = () => {
-      clearTimeout(t);
-      t = window.setTimeout(() => setWriting(false), 900);
+      clearTimeout(penUp.current);
+      penUp.current = window.setTimeout(() => setWriting(false), 900);
     };
-    host.addEventListener('pointerdown', down);
     window.addEventListener('pointerup', up);
-    return () => {
-      host.removeEventListener('pointerdown', down);
-      window.removeEventListener('pointerup', up);
-      pi.destroy();
-      setInput(null);
-    };
-  }, [renderer, canWrite, room.board, mode]);
+    return () => window.removeEventListener('pointerup', up);
+  }, []);
+  // Side by side needs the flat board (the classroom has one board).
+  useEffect(() => {
+    if (view.mode === 'split' && mode === 'room') {
+      setMode('board');
+      setWalking(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view.mode]);
 
-  const goPage = (p: number) => room.board.local({ t: 'pg', pg: p });
+  const goPage = (p: number | undefined) => p !== undefined && room.board.local({ t: 'pg', pg: p });
   const newPage = () => room.board.local({ t: 'pn' });
+  /** Next / previous slide, or whiteboard page on the whiteboard. */
+  const step = (d: 1 | -1) => {
+    const list = view.mode === 'board' ? view.boards : view.slides;
+    const cur = view.mode === 'board' ? view.wb : view.slide;
+    goPage(list[list.indexOf(cur ?? -1) + d]);
+  };
+  const slideFile = useRef<HTMLInputElement>(null);
 
   // Keyboard shortcuts — most tablets map their express keys to these.
   useEffect(() => {
@@ -146,16 +147,26 @@ export default function Teacher() {
         setPen((p) => ({ ...p, color: KEY_COLORS[Number(k) - 1], tool: p.tool === 'eraser' ? 'pen' : p.tool }));
       } else if (k === 'n') {
         newPage();
-      } else if (k === 'pagedown' || k === 'arrowright') {
-        if (pg.live < pg.pages - 1) goPage(pg.live + 1);
+      } else if (k === 'f') {
+        if (document.fullscreenElement) void document.exitFullscreen();
+        else void document.documentElement.requestFullscreen?.().catch(() => undefined);
+      } else if (k === 'b') {
+        room.board.local({ t: 'md', m: 'board' });
+      } else if (k === 's') {
+        room.board.local({ t: 'md', m: 'slides' });
+      } else if (k === 'd') {
+        room.board.local({ t: 'md', m: 'split' });
+      } else if (k === 'pagedown' || k === 'arrowright' || k === ' ') {
+        if (k === ' ') e.preventDefault();
+        step(1);
       } else if (k === 'pageup' || k === 'arrowleft') {
-        if (pg.live > 0) goPage(pg.live - 1);
+        step(-1);
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [input, pg.live, pg.pages, walking]);
+  }, [input, view, walking]);
 
   const me = room.welcome?.me.uid;
 
@@ -292,13 +303,13 @@ export default function Teacher() {
           {can3d() && (
             <div className="seg" role="tablist" aria-label="View">
               <button className={mode === 'room' && !walking ? 'is-on' : ''} onClick={() => { setMode('room'); setWalking(false); }} title="Write in the 3D classroom">
-                <Icon.cube /> Classroom
+                <Icon.cube /> <span>Classroom</span>
               </button>
               <button className={mode === 'room' && walking ? 'is-on' : ''} onClick={() => { setMode('room'); setWalking(true); }} title="Walk around the class">
-                <Icon.walk /> Walk
+                <Icon.walk /> <span>Walk</span>
               </button>
               <button className={mode === 'board' ? 'is-on' : ''} onClick={() => { setMode('board'); setWalking(false); }} title="Write on the large board">
-                <Icon.board /> Board
+                <Icon.board /> <span>Board</span>
               </button>
             </div>
           )}
@@ -315,8 +326,8 @@ export default function Teacher() {
             </button>
           )}
           {audioOn && speakers.length > 0 && (
-            <button className="btn btn--ghost btn--sm" onClick={() => room.socket?.emit('muteAll')} title="Turn off every student's microphone">
-              <Icon.micOff /> Mute all
+            <button className="btn btn--ghost btn--sm btn--muteall" onClick={() => room.socket?.emit('muteAll')} title="Turn off every student's microphone">
+              <Icon.micOff /> <span>Mute all</span>
             </button>
           )}
           {sound.sharing && (
@@ -333,8 +344,8 @@ export default function Teacher() {
           <span className="pill" title="Students in the classroom">
             <Icon.users /> {room.cls?.present ?? 0}
           </span>
-          <button className="btn btn--ghost btn--sm" onClick={() => setConfirmEnd(true)}>
-            End class
+          <button className="btn btn--ghost btn--sm btn--end" onClick={() => setConfirmEnd(true)}>
+            End<span>&nbsp;class</span>
           </button>
         </div>
       </header>
@@ -352,25 +363,59 @@ export default function Teacher() {
         />
 
         <div className="console__board">
-          {mode === 'board' && <Board board={room.board} onRenderer={setRenderer} writable={canWrite} className={`tool-${pen.tool}`} />}
-          <div className={`pagebar ${writing ? 'is-quiet' : ''}`}>
-            <button aria-label="Previous page" disabled={pg.live === 0} onClick={() => goPage(pg.live - 1)}>
-              <Icon.left />
-            </button>
-            <span>
-              Page {pg.live + 1} of {pg.pages}
-            </span>
-            <button aria-label="Next page" disabled={pg.live >= pg.pages - 1} onClick={() => goPage(pg.live + 1)}>
-              <Icon.right />
-            </button>
-            <span className="pagebar__sep" />
-            <button aria-label="New page" title="New page (N)" onClick={newPage}>
-              <Icon.plus />
-            </button>
-            <button aria-label="Save notes" title="Save notes as PDF" onClick={() => saveNotesPdf(room.board.state, info)}>
-              <Icon.download />
-            </button>
-          </div>
+          {mode === 'board' && (
+            <div className="console__stage">
+              <Stage
+                board={room.board}
+                view={view}
+                pen={canWrite ? () => penRef.current : undefined}
+                boardClass={`tool-${pen.tool}`}
+                onInput={setInput}
+                onHistory={(u, r) => setHist({ undo: u, redo: r })}
+                onPenDown={penDown}
+                onRenderer={setRenderer}
+                showFull={false}
+              />
+            </div>
+          )}
+          <input
+            ref={slideFile}
+            type="file"
+            accept={SLIDE_TYPES}
+            hidden
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              e.target.value = '';
+              if (f) void slides.add(f);
+            }}
+          />
+          <ModeBar
+            board={room.board}
+            view={view}
+            quiet={writing}
+            onAddSlides={() => slideFile.current?.click()}
+            extra={
+              <div className="modebar__nav">
+                {slides.progress && (
+                  <span className="modebar__busy">
+                    {slides.progress.step === 'read' ? 'Preparing' : 'Sending'} {slides.progress.done}/{slides.progress.total}…
+                  </span>
+                )}
+                <button aria-label="Save notes" title="Save notes as PDF" onClick={() => saveNotesPdf(room.board.state, info)}>
+                  <Icon.download />
+                </button>
+                {document.fullscreenEnabled && (
+                  <button
+                    aria-label="Full screen"
+                    title="Full screen (F)"
+                    onClick={() => (document.fullscreenElement ? void document.exitFullscreen() : void document.documentElement.requestFullscreen().catch(() => undefined))}
+                  >
+                    <Icon.fullscreen />
+                  </button>
+                )}
+              </div>
+            }
+          />
         </div>
 
         <aside className={`rail ${writing ? 'is-quiet' : ''}`} aria-label="Class">
@@ -425,7 +470,7 @@ export default function Teacher() {
                 )}
                 <AddSlides upload={slides} className="btn btn--ghost btn--wide" />
                 <p className="muted small">
-                  Slides become board pages everyone sees, and you can write on them. From PowerPoint or Google Slides, save as PDF first.
+                  Slides open large for everyone, and you can write on them. Switch between Whiteboard, Slides and Side by side under the board. From PowerPoint or Google Slides, save as PDF first.
                 </p>
 
                 <p className="panel__label panel__label--gap">Students presenting</p>
@@ -580,7 +625,7 @@ export default function Teacher() {
                 {can3d() && (
                   <div className="classview">
                     <Suspense fallback={null}>
-                      <Classroom3D view="classview" people={room.people} teacherName={null} showNames />
+                      <Classroom3D view="classview" students={roomStudents(info?.size, room.people)} people={room.people} teacherName={null} showNames />
                     </Suspense>
                     {room.people.length === 0 && <p className="classview__empty">Students appear at their desks as they join</p>}
                   </div>
@@ -768,6 +813,7 @@ export default function Teacher() {
         <Suspense fallback={<div className="stage3d__loading" />}>
           <Classroom3D
             view="teacher"
+            students={roomStudents(info?.size, room.people)}
             board={room.board}
             people={room.people}
             teacherName={info?.teacherName ?? null}
