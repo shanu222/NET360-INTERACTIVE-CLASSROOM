@@ -1695,3 +1695,19 @@ svg { display: block; }
 @media (max-width: 380px) { .kindpick button small { display: none; } }
 /* Messages stay visible over the end-of-class card. */
 .veil ~ .toast, .toast { z-index: 25; }
+
+/* Slides take all the room there is: full width, no ledge, slim frame. */
+.room__stage > .stagebox:has(.stagev--slides) { width: 100%; }
+.room--full .room__stage:has(.stagev--slides, .stagev--split) { padding-left: max(8px, env(safe-area-inset-left)); padding-right: max(8px, env(safe-area-inset-right)); }
+.room--display .room__stage:has(.stagev--slides, .stagev--split) { padding: 9vh 1.2vw 1.5vh; }
+.room--display .room__stage > .stagebox:has(.stagev--slides, .stagev--split) { width: 100%; }
+.stagev--slides .slate::after, .stagev--split .stagev__pane--slide .slate::after { display: none; }
+.stagev--slides { --frame: clamp(3px, 0.35vw, 6px); }
+.stagev--slides .stagev__pane .slate { width: min(calc(100cqw - var(--frame) * 2), calc((100cqh - var(--frame) * 2) * 16 / 9)); }
+/* The pen dock (and its shapes menu) sits above the board. */
+.dock { z-index: 5; }
+.rail { z-index: 6; }
+/* While slides are up, the room steps back: no pictures peeking out, more height for the slide. */
+.room:has(.stagev--slides, .stagev--split) :is(.room__art, .room__plant, .room__shelf, .room__desk) { display: none; }
+.room--full .room__stage:has(.stagev--slides) { padding-top: max(50px, env(safe-area-inset-top)); padding-bottom: max(14px, env(safe-area-inset-bottom)); }
+.stagev--slides .stagev__full { top: 6px; right: 6px; bottom: auto; }

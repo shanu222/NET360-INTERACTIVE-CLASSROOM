@@ -1,8 +1,5 @@
 import {
   ACESFilmicToneMapping,
-  BoxGeometry,
-  Group,
-  MeshStandardMaterial,
   Mesh,
   PlaneGeometry,
   Plane,
@@ -87,6 +84,10 @@ export class ClassroomScene {
   private pinchDist = 0;
   private ray = new Raycaster();
   private boardPlane = new Plane(new Vector3(0, 0, 1), -BOARD.z);
+  /** The board in this room (bigger in a big hall). */
+  private get B() {
+    return this.room.dims.board;
+  }
   /** Student "walk" mode: free movement around the room. */
   private walk = {
     on: false,
@@ -143,40 +144,16 @@ export class ClassroomScene {
     boardMat.color.set('#ffffff');
     const layer = (dz: number) => {
       const m = new Mesh(
-        new PlaneGeometry(BOARD.w, BOARD.h),
+        new PlaneGeometry(this.B.w, this.B.h),
         new MeshBasicMaterial({ transparent: true, toneMapped: false, depthWrite: false, visible: false }),
       );
-      m.position.set(0, BOARD.y, BOARD.z + dz);
+      m.position.set(0, this.B.y, this.B.z + dz);
       m.renderOrder = 2;
       this.scene.add(m);
       return m;
     };
     this.inkCommitted = layer(0.002);
     this.inkLive = layer(0.004);
-
-    // A lecture hall also shows the board on two screens either side, so the back rows can read it.
-    // They share the board's materials: whatever is written appears on all three.
-    if (this.room.dims.W >= 22) {
-      const sw = BOARD.w * 0.86;
-      const sh = BOARD.h * 0.86;
-      const frameMat = new MeshStandardMaterial({ color: '#1c1b1d', roughness: 0.4, metalness: 0.3 });
-      for (const side of [-1, 1]) {
-        const g = new Group();
-        g.add(new Mesh(new BoxGeometry(sw + 0.18, sh + 0.18, 0.06), frameMat));
-        const face = (mat: MeshBasicMaterial, z: number) => {
-          const m = new Mesh(new PlaneGeometry(sw, sh), mat);
-          m.position.z = z;
-          m.renderOrder = 2;
-          g.add(m);
-        };
-        face(boardMat, 0.032);
-        face(this.inkCommitted.material as MeshBasicMaterial, 0.034);
-        face(this.inkLive.material as MeshBasicMaterial, 0.036);
-        g.position.set(side * (4.85 + 1.2 + sw / 2), BOARD.y + 0.3, 0.08);
-        g.rotation.y = -side * 0.16;
-        this.scene.add(g);
-      }
-    }
 
     this.ro = new ResizeObserver(() => this.resize());
     this.ro.observe(host);
@@ -274,27 +251,27 @@ export class ClassroomScene {
     const cam = this.camera;
     const fit = (boardFrac: number, heightFrac: number, fov: number) => {
       const t = Math.tan(((fov / 2) * Math.PI) / 180);
-      const dW = BOARD.w / boardFrac / 2 / (t * aspect);
-      const dH = BOARD.h / heightFrac / 2 / t;
-      return Math.min(14.2, Math.max(dW, dH));
+      const dW = this.B.w / boardFrac / 2 / (t * aspect);
+      const dH = this.B.h / heightFrac / 2 / t;
+      return Math.min(14.2 * (this.B.w / BOARD.w), Math.max(dW, dH));
     };
     switch (this.view) {
       case 'student': {
         // Desk: the student's own seat, at seated eye height, looking at the board.
         const seat = this.seat ?? new Vector3(0, 0.47, 7.3);
         this.poses.desk.pos.set(seat.x * 0.94, 1.42, seat.z - 0.05);
-        this.poses.desk.target.set(0, BOARD.y - 0.32, 0);
+        this.poses.desk.target.set(0, this.B.y - 0.32, 0);
         // Wide enough that the whole board fits from this seat, with the own desk at the bottom.
-        const dist = this.poses.desk.pos.distanceTo(new Vector3(0, BOARD.y, BOARD.z));
+        const dist = this.poses.desk.pos.distanceTo(new Vector3(0, this.B.y, this.B.z));
         const deg = (r: number) => (r * 180) / Math.PI;
-        const byHeight = 2 * deg(Math.atan((BOARD.h * 0.5 * 1.45) / dist));
-        const byWidth = 2 * deg(Math.atan((BOARD.w * 0.5 * 1.18) / (dist * aspect)));
+        const byHeight = 2 * deg(Math.atan((this.B.h * 0.5 * 1.45) / dist));
+        const byWidth = 2 * deg(Math.atan((this.B.w * 0.5 * 1.18) / (dist * aspect)));
         this.poses.desk.fov = Math.min(80, Math.max(42, byHeight, byWidth) + 4);
         // Board: straight in front of it, filling the screen.
         const boardFov = 40;
         const d = fit(0.97, 0.93, boardFov);
-        this.poses.board.pos.set(0, BOARD.y, BOARD.z + d);
-        this.poses.board.target.set(0, BOARD.y, 0);
+        this.poses.board.pos.set(0, this.B.y, this.B.z + d);
+        this.poses.board.target.set(0, this.B.y, 0);
         this.poses.board.fov = boardFov;
         this.applyZoom();
         break;
@@ -302,15 +279,15 @@ export class ClassroomScene {
       case 'teacher': {
         cam.fov = 36;
         const d = fit(0.64, 0.6, 36);
-        this.base.pos.set(0, 2.45, BOARD.z + d);
-        this.base.target.set(0, BOARD.y - 0.36, 0);
+        this.base.pos.set(0, 2.45 + (this.B.y - BOARD.y) * 0.7, this.B.z + d);
+        this.base.target.set(0, this.B.y - 0.36, 0);
         break;
       }
       case 'display': {
         cam.fov = 34;
         const d = fit(0.56, 0.56, 34);
-        this.base.pos.set(0, 2.35, BOARD.z + d);
-        this.base.target.set(0, BOARD.y - 0.3, 0);
+        this.base.pos.set(0, 2.35 + (this.B.y - BOARD.y) * 0.7, this.B.z + d);
+        this.base.target.set(0, this.B.y - 0.3, 0);
         break;
       }
       case 'classview': {
@@ -554,7 +531,7 @@ export class ClassroomScene {
     this.ray.setFromCamera(ndc, this.camera);
     const hit = new Vector3();
     if (!this.ray.ray.intersectPlane(this.boardPlane, hit)) return [-1, -1];
-    return [((hit.x + BOARD.w / 2) / BOARD.w) * 1600, ((BOARD.y + BOARD.h / 2 - hit.y) / BOARD.h) * 900];
+    return [((hit.x + this.B.w / 2) / this.B.w) * 1600, ((this.B.y + this.B.h / 2 - hit.y) / this.B.h) * 900];
   };
 
   private onPointer = (e: PointerEvent) => {
@@ -664,7 +641,7 @@ export class ClassroomScene {
     const xs: number[] = [];
     const ys: number[] = [];
     for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
-      const v = new Vector3((sx * BOARD.w) / 2, BOARD.y + (sy * BOARD.h) / 2, BOARD.z).project(this.camera);
+      const v = new Vector3((sx * this.B.w) / 2, this.B.y + (sy * this.B.h) / 2, this.B.z).project(this.camera);
       if (v.z > 1 || v.z < -1) {
         // Part of the board is behind the camera (looking away while walking).
         if (this.lastRect !== 'none') {

@@ -1,24 +1,16 @@
 import { useState, type FormEvent } from 'react';
 import { useAuth } from '../lib/auth.tsx';
 import { GoogleMark } from './Lobby.tsx';
-import { Icon } from './Icons.tsx';
 
 /**
- * Sign-in for hosts: a Google account, or an email account (sign in, create one,
- * or reset the password). A plain name field appears only on a local test server.
+ * Sign-in for hosts: Google accounts (the first sign-in creates the account).
+ * A plain name field appears only on a local test server.
  */
 export function SignIn({ prompt }: { prompt?: string }) {
-  const { mode, signInWithGoogle, signInWithEmail, signUpWithEmail, resetPassword, signInDev, authError } = useAuth();
+  const { mode, signInWithGoogle, signInDev, authError } = useAuth();
   const [devName, setDevName] = useState(localStorage.getItem('n360.dev.name') ?? '');
-  const [busy, setBusy] = useState<'' | 'google' | 'email'>('');
+  const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
-  const [note, setNote] = useState('');
-  // null: the two choices · otherwise the email form in that state
-  const [form, setForm] = useState<null | 'in' | 'up' | 'reset'>(null);
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [show, setShow] = useState(false);
 
   if (mode !== 'firebase') {
     const submit = (e: FormEvent) => {
@@ -42,109 +34,22 @@ export function SignIn({ prompt }: { prompt?: string }) {
   const google = () => {
     // Called synchronously from the click so the Google window isn't blocked.
     setErr('');
-    setBusy('google');
+    setBusy(true);
     sessionStorage.setItem('n360.signingIn', '1');
     signInWithGoogle()
       .catch((e) => setErr((e as Error).message))
-      .finally(() => setBusy(''));
+      .finally(() => setBusy(false));
   };
-
-  const submit = async (e: FormEvent) => {
-    e.preventDefault();
-    setErr('');
-    setNote('');
-    setBusy('email');
-    try {
-      if (form === 'up') await signUpWithEmail(name, email, password);
-      else if (form === 'in') await signInWithEmail(email, password);
-      else if (form === 'reset') {
-        await resetPassword(email);
-        setNote(`We sent a link to ${email.trim()} to choose a new password.`);
-        setForm('in');
-      }
-    } catch (ex) {
-      setErr((ex as Error).message);
-    } finally {
-      setBusy('');
-    }
-  };
-
-  const validEmail = /^\S+@\S+\.\S+$/.test(email.trim());
-  const ready =
-    form === 'reset' ? validEmail : form === 'up' ? name.trim().length >= 2 && validEmail && password.length >= 8 : validEmail && password.length > 0;
 
   return (
     <div className="signin">
       {prompt && <p className="signin__prompt">{prompt}</p>}
-      {form === null ? (
-        <>
-          <button className="btn btn--google btn--wide" disabled={Boolean(busy)} onClick={google}>
-            <GoogleMark />
-            {busy === 'google' ? 'Opening Google…' : 'Continue with Google'}
-          </button>
-          <button className="btn btn--ghost btn--wide" onClick={() => setForm('in')}>
-            <Icon.mail /> Continue with email
-          </button>
-        </>
-      ) : (
-        <form className="stack signin__email" onSubmit={submit} noValidate>
-          <div className="signin__head">
-            <button type="button" className="signin__back" aria-label="Back" onClick={() => { setForm(null); setErr(''); setNote(''); }}>
-              <Icon.left />
-            </button>
-            <strong>{form === 'up' ? 'Create your account' : form === 'reset' ? 'Reset your password' : 'Sign in with email'}</strong>
-          </div>
-          {form === 'up' && (
-            <label className="field">
-              <span>Your name</span>
-              <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Shown to participants" autoComplete="name" maxLength={60} autoFocus />
-            </label>
-          )}
-          <label className="field">
-            <span>Email</span>
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" autoComplete="email" inputMode="email" autoFocus={form !== 'up'} />
-          </label>
-          {form !== 'reset' && (
-            <label className="field">
-              <span>Password</span>
-              <span className="signin__pw">
-                <input
-                  type={show ? 'text' : 'password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder={form === 'up' ? 'At least 8 characters' : 'Your password'}
-                  autoComplete={form === 'up' ? 'new-password' : 'current-password'}
-                />
-                <button type="button" className="signin__show" onClick={() => setShow((v) => !v)}>
-                  {show ? 'Hide' : 'Show'}
-                </button>
-              </span>
-            </label>
-          )}
-          <button className="btn btn--primary btn--wide" disabled={!ready || Boolean(busy)}>
-            {busy === 'email' ? 'Please wait…' : form === 'up' ? 'Create account' : form === 'reset' ? 'Send reset link' : 'Sign in'}
-          </button>
-          <div className="signin__links">
-            {form === 'in' && (
-              <>
-                <button type="button" className="link" onClick={() => { setForm('up'); setErr(''); }}>
-                  Create an account
-                </button>
-                <button type="button" className="link" onClick={() => { setForm('reset'); setErr(''); }}>
-                  Forgot password?
-                </button>
-              </>
-            )}
-            {form !== 'in' && (
-              <button type="button" className="link" onClick={() => { setForm('in'); setErr(''); }}>
-                I already have an account
-              </button>
-            )}
-          </div>
-        </form>
-      )}
-      {note && <p className="signin__ok">{note}</p>}
+      <button className="btn btn--google btn--wide" disabled={busy} onClick={google}>
+        <GoogleMark />
+        {busy ? 'Opening Google…' : 'Continue with Google'}
+      </button>
       {(err || authError) && <p className="form-error">{err || authError}</p>}
+      <p className="signin__note">New here? Continuing with Google creates your host account.</p>
     </div>
   );
 }

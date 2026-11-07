@@ -134,7 +134,7 @@ export function Stage({
   const at = list.indexOf(shown);
 
   return (
-    <div ref={fs.ref} className={`stagev ${split ? 'stagev--split' : ''} ${fs.on ? 'is-full' : ''} ${fs.cover ? 'stagev--cover' : ''} ${className}`}>
+    <div ref={fs.ref} className={`stagev ${split ? 'stagev--split' : ''} ${!split && single === 'slide' ? 'stagev--slides' : ''} ${fs.on ? 'is-full' : ''} ${fs.cover ? 'stagev--cover' : ''} ${className}`}>
       {halves.map((half) => (
         <Pane
           key={half}

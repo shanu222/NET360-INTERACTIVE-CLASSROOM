@@ -8,11 +8,6 @@ import { SignIn } from '../components/SignIn.tsx';
 import { Lobby } from '../components/Lobby.tsx';
 import { Icon } from '../components/Icons.tsx';
 
-const SUGGESTIONS: Record<SessionKind, string[]> = {
-  meeting: ['Weekly team meeting', 'Project review', 'One-to-one', 'Workshop'],
-  class: ['Physics', 'Chemistry', 'Mathematics', 'Biology', 'English', 'Computer Science'],
-};
-
 const remembered = <T,>(key: string, ok: (v: string) => T | null, fallback: T): T => {
   try {
     const v = localStorage.getItem(key);
@@ -58,7 +53,7 @@ export default function Home() {
     remember('n360.size', String(size));
     remember('n360.kind', kind);
     try {
-      const name = title.trim() || (kind === 'meeting' ? `${user?.name ?? 'My'}’s meeting` : 'Class');
+      const name = title.trim();
       const r = await api.startClass(await headers(), name, topic.trim(), size, kind);
       nav(`/host/${r.session.id}`, { state: { boardKey: r.boardKey, padKey: r.padKey } });
     } catch (ex) {
@@ -143,19 +138,14 @@ export default function Home() {
               ))}
             </div>
             <label className="field">
-              <span>{kind === 'meeting' ? 'Meeting name' : 'Class or subject'}</span>
+              <span>{kind === 'meeting' ? 'Meeting name' : 'Class name'}</span>
               <input
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder={kind === 'meeting' ? `${user.name}’s meeting` : 'e.g. Physics'}
+                placeholder={kind === 'meeting' ? 'Type a meeting name' : 'Type a class name'}
                 maxLength={80}
-                list={`suggest-${kind}`}
+                autoComplete="off"
               />
-              <datalist id={`suggest-${kind}`}>
-                {SUGGESTIONS[kind].map((s) => (
-                  <option key={s} value={s} />
-                ))}
-              </datalist>
             </label>
             <label className="field">
               <span>{kind === 'meeting' ? 'Agenda (optional)' : 'Today’s topic (optional)'}</span>
@@ -174,7 +164,7 @@ export default function Home() {
                 {size <= 40 ? 'A room for up to 40.' : size <= 60 ? 'A larger room for up to 64.' : size <= 150 ? 'A lecture room for 150.' : size <= 300 ? 'A hall for 300.' : 'An auditorium for 500.'}
               </span>
             </fieldset>
-            <button className="btn btn--primary btn--wide" disabled={busy}>
+            <button className="btn btn--primary btn--wide" disabled={busy || title.trim().length < 2}>
               {busy ? `Opening your ${thing}…` : `Start ${thing}`}
             </button>
             {err && <p className="form-error">{err}</p>}

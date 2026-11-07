@@ -35,7 +35,7 @@ export default function BoardDisplay() {
   const present = room.cls?.present ?? 0;
   const showJoin = (room.cls?.showJoin ?? true) && room.status !== 'ended';
   // Before anything is written the join card takes centre stage; afterwards it moves to a corner.
-  const big = pg.inked === 0 && pg.pages === 1;
+  const big = pg.inked === 0 && pg.pages === 1 && view.mode === 'board' && view.slides.length === 0;
 
   const onBoard: ReactNode = (
     <>

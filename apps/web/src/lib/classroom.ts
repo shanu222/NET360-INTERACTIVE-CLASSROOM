@@ -56,6 +56,8 @@ export function useClassroom(
   authRef.current = socketAuth;
   const clientId = useMemo(() => Math.random().toString(36).slice(2, 12), []);
   const board = useMemo(() => new BoardSession(clientId), [clientId]);
+  // Automated checks on a local test server read the board directly.
+  if (location.hostname === 'localhost') (window as unknown as { __board?: BoardSession }).__board = board;
   const [socket, setSocket] = useState<Socket<ServerToClient, ClientToServer> | null>(null);
   const [status, setStatus] = useState<Status>('connecting');
   const [error, setError] = useState<string | null>(null);

@@ -86,6 +86,16 @@ export interface Layout {
   W: number;
   D: number;
   H: number;
+  /** The one board on the front wall: larger in bigger rooms so the back rows can read it. */
+  board: BoardSize;
+}
+
+export interface BoardSize {
+  w: number;
+  h: number;
+  /** Height of its centre. */
+  y: number;
+  z: number;
 }
 
 /** Desks for every class size: a classroom for 40, up to an auditorium for 500. */
@@ -96,12 +106,19 @@ export function layoutFor(students: number): Layout {
   const half: number[] = [];
   for (let k = 0; k < cols / 2; k++) half.push(0.84 + k * 1.68 + aisle / 2 + Math.floor(k / 4) * (cols >= 16 ? 0.9 : 0));
   const xs = half.flatMap((x) => [-x, x]);
+  // One board, scaled with the room: 5.6 m wide for 40 students, about 10.6 m for 500.
+  const s = rows <= 7 ? 1 : rows <= 8 ? 1.06 : rows <= 13 ? 1.35 : rows <= 19 ? 1.65 : 1.9;
+  const bw = BOARD.w * s;
+  const bh = BOARD.h * s;
+  const board = { w: bw, h: bh, y: 1.15 + bh / 2, z: BOARD.z };
+  // The first row sits further back from a bigger board.
   const pitch = 1.4;
-  const zs = Array.from({ length: rows }, (_, r) => 3.7 + r * pitch);
-  const W = Math.max(ROOM.W, 2 * (half[half.length - 1] + 2.3));
+  const first = 3.7 + (s - 1) * 3;
+  const zs = Array.from({ length: rows }, (_, r) => first + r * pitch);
+  const W = Math.max(ROOM.W, 2 * (half[half.length - 1] + 2.3), bw + 2 * 3.6);
   const D = Math.max(ROOM.D, zs[zs.length - 1] + 0.62 + 3.2);
-  const H = ROOM.H + Math.min(2, (D - ROOM.D) * 0.06);
-  return { cols, rows, xs, zs, W, D, H };
+  const H = Math.max(ROOM.H + Math.min(2, (D - ROOM.D) * 0.06), 1.15 + bh + 0.9);
+  return { cols, rows, xs, zs, W, D, H, board };
 }
 
 export interface Room {
@@ -116,7 +133,7 @@ export interface Room {
   tickClock: () => void;
   sun: DirectionalLight;
   /** Room size in metres (width, depth, height). */
-  dims: { W: number; D: number; H: number };
+  dims: { W: number; D: number; H: number; board: BoardSize };
 }
 
 const std = (o: ConstructorParameters<typeof MeshStandardMaterial>[0]) => new MeshStandardMaterial(o);
@@ -235,23 +252,24 @@ export function buildRoom(opts: { shadows: boolean; students?: number }): Room {
   }
 
   /* ---------- the board ---------- */
-  const boardFrame = box(BOARD.w + 0.22, BOARD.h + 0.22, 0.08, std({ map: T.oak('#4a3423'), roughness: 0.45 }), 0, BOARD.y, 0.05);
+  const B = lay.board;
+  const boardFrame = box(B.w + 0.22, B.h + 0.22, 0.08, std({ map: T.oak('#4a3423'), roughness: 0.45 }), 0, B.y, 0.05);
   g.add(boardFrame);
-  const board = new Mesh(new PlaneGeometry(BOARD.w, BOARD.h), new MeshBasicMaterial({ color: '#1d2b27', toneMapped: false }));
-  board.position.set(0, BOARD.y, BOARD.z);
+  const board = new Mesh(new PlaneGeometry(B.w, B.h), new MeshBasicMaterial({ color: '#1d2b27', toneMapped: false }));
+  board.position.set(0, B.y, B.z);
   g.add(board);
-  g.add(box(BOARD.w - 0.4, 0.05, 0.14, std({ color: '#6b4c33', roughness: 0.5 }), 0, BOARD.y - BOARD.h / 2 - 0.13, 0.12));
+  g.add(box(B.w - 0.4, 0.05, 0.14, std({ color: '#6b4c33', roughness: 0.5 }), 0, B.y - B.h / 2 - 0.13, 0.12));
   // a soft wash of light over the board
-  const boardLight = new PointLight('#fff1dc', 3, 7, 2);
-  boardLight.position.set(0, 4.2, 1.6);
+  const boardLight = new PointLight('#fff1dc', 3 * (B.w / BOARD.w) ** 2, 7 * (B.w / BOARD.w), 2);
+  boardLight.position.set(0, B.y + B.h / 2 + 0.6, 1.6 * (B.w / BOARD.w));
   g.add(boardLight);
 
   /* ---------- art on the front wall ---------- */
   const plates: [Texture, number, number, number, number][] = [
-    [T.plateMaxwell(), 1.25, 1.46, -4.85, 3.0],
-    [T.plateSpiral(), 1.3, 0.98, -4.85, 1.58],
-    [T.plateEuler(), 1.25, 1.46, 4.85, 3.0],
-    [T.plateLens(), 1.3, 0.98, 4.85, 1.58],
+    [T.plateMaxwell(), 1.25, 1.46, -(B.w / 2 + 2.05), 3.0],
+    [T.plateSpiral(), 1.3, 0.98, -(B.w / 2 + 2.05), 1.58],
+    [T.plateEuler(), 1.25, 1.46, B.w / 2 + 2.05, 3.0],
+    [T.plateLens(), 1.3, 0.98, B.w / 2 + 2.05, 1.58],
   ];
   for (const [art, w, h, x, y] of plates) {
     const f = framed(art, w, h, '#c9a24a', false, 0.85);
@@ -365,7 +383,7 @@ export function buildRoom(opts: { shadows: boolean; students?: number }): Room {
   tDesk.add(box(0.36, 0.23, 0.015, std({ color: '#1c1c1f', metalness: 0.5, roughness: 0.3 }), 0.4, 0.92, -0.08));
   tDesk.add(box(0.28, 0.06, 0.2, std({ color: '#7a2e2e' }), -0.5, 0.81, 0.02));
   tDesk.add(box(0.26, 0.05, 0.19, std({ color: '#264b6b' }), -0.5, 0.865, 0.02));
-  tDesk.position.set(4.3, 0, 2.0);
+  tDesk.position.set(Math.max(4.3, B.w / 2 + 1.5), 0, 2.0 + (B.w - BOARD.w) * 0.15);
   tDesk.rotation.y = -0.18;
   g.add(tDesk);
 
@@ -449,7 +467,7 @@ export function buildRoom(opts: { shadows: boolean; students?: number }): Room {
   }
   if (big > 1) hemi.intensity = 1.45 + Math.min(0.5, (big - 1) * 0.35);
 
-  return { group: g, board, seats, teacherSpot: new Vector3(-3.55, 0, 1.35), tickClock, sun, dims: { W, D, H } };
+  return { group: g, board, seats, teacherSpot: new Vector3(-Math.max(3.55, B.w / 2 + 0.75), 0, 1.35 + (B.w - BOARD.w) * 0.1), tickClock, sun, dims: { W, D, H, board: B } };
 }
 
 /* ---------- furniture helpers ---------- */
